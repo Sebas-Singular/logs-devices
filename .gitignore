@@ -1,0 +1,18 @@
+.DS_Store
+.env
+.ftp-deploy-sync-state.json
+
+# Runtime logs are generated on the server and must not be deployed from Git.
+storage/*.json
+storage/**/*.json
+storage/logs/*
+!storage/.gitkeep
+!storage/.htaccess
+!storage/logs/.gitkeep
+
+# Local tooling
+node_modules/
+vendor/
+.phpunit.cache/
+.idea/
+.vscode/
