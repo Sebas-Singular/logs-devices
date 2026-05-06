@@ -1,9 +1,7 @@
 name: Deploy to cdmon
 
 on:
-  push:
-    branches:
-      - main
+  # Keep FTP deploy manual until cdmon credentials and target directory are tested.
   workflow_dispatch:
 
 jobs:
