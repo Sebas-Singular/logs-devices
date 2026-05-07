@@ -1,7 +1,6 @@
 name: Deploy to cdmon
 
 on:
-  # Keep FTP deploy manual until cdmon credentials and target directory are tested.
   workflow_dispatch:
 
 jobs:
@@ -24,11 +23,30 @@ jobs:
           exclude: |
             **/.git*
             **/.git*/**
+            **/.github/**
             **/.DS_Store
+
             .env
+            .env.*
+            **/.env
+            **/.env.*
+
+            private/**
             storage/*.json
             storage/**/*.json
             storage/logs/**
+
             docs/**
             scripts/**
+            tests/**
+            vendor/**
+            node_modules/**
+
+            docker/**
+            .docker/**
+            docker-compose.yml
+            Dockerfile
+
+            index.php
+
             README.md

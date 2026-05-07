@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    phpunit.xml.dist — Configuración base de PHPUnit para el proyecto.
+
+    El sufijo ".dist" significa que es el fichero de distribución que va al repo.
+    Si necesitas configuración local que no quieres commitear, copia este fichero
+    a phpunit.xml (sin .dist) y modifícalo. phpunit.xml tiene prioridad y está
+    en .gitignore.
+
+    Para correr todos los tests:
+        docker compose exec app ./vendor/bin/phpunit
+
+    Para correr solo un grupo/fichero:
+        docker compose exec app ./vendor/bin/phpunit tests/Parsers/
+        docker compose exec app ./vendor/bin/phpunit --filter testParsesValidTelemetryLine
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="tests/bootstrap.php"
+         colors="true"
+         displayDetailsOnTestsThatTriggerErrors="true"
+         displayDetailsOnTestsThatTriggerWarnings="true">
+
+    <testsuites>
+        <testsuite name="logs-devices">
+            <directory>tests</directory>
+        </testsuite>
+    </testsuites>
+
+    <!--
+        Source coverage: qué código se mide cuando se genera cobertura.
+        Por ahora no configuramos un driver de cobertura (xdebug/pcov), pero
+        tener esto definido permite activarlo fácilmente en el futuro con:
+            docker compose exec app ./vendor/bin/phpunit - -coverage-text
+    -->
+    <source>
+        <include>
+            <directory suffix=".php">src</directory>
+        </include>
+    </source>
+
+</phpunit>
