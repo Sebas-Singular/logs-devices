@@ -1,0 +1,1 @@
+{"message":"bridge_logs","logText":"[2026-05-08 13:30:00] [SENSOR] INFO: [AA:BB:CC:DD:EE:FF] TELEMETRY -\u003e T=22.5 | H=40","rotated":false,"toOffset":1072205,"bridgeId":"120","sentAt":"2026-05-08T12:36:48.227Z","bridgeName":"Manual Production Test","fromOffset":586442,"bytes":123}
