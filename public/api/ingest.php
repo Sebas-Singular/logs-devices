@@ -15,6 +15,7 @@ use App\Support\Env;
 require_once __DIR__ . '/../../vendor/autoload.php';
  
 Env::load(__DIR__ . '/../../../../private/.env');
+Env::loadPhpConfig(__DIR__ . '/../../src/Config/runtime.local.php');
  
 $receivedAt = new DateTimeImmutable('now');
 $receivedAtSql = $receivedAt->format('Y-m-d H:i:s');

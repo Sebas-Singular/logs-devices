@@ -1,0 +1,8 @@
+Options -Indexes
+
+RedirectMatch 404 ^/(src|vendor)(/|$)
+RedirectMatch 404 ^/(storage|logs-notifications|docs|tests|scripts)(/|$)
+
+<FilesMatch "(^\.|composer\.(json|lock)|phpunit\.xml(\.dist)?|\.phpunit\.result\.cache)">
+Require all denied
+</FilesMatch>

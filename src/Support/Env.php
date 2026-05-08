@@ -48,4 +48,36 @@ final class Env
     {
         return self::$values[$key] ?? $_ENV[$key] ?? getenv($key) ?: $default;
     }
+
+    public static function loadPhpConfig(string $path): void
+    {
+        if (!is_file($path)) {
+            return;
+        }
+
+        $values = require $path;
+
+        if (!is_array($values)) {
+            return;
+        }
+
+        foreach ($values as $key => $value) {
+            if (!is_string($key)) {
+                continue;
+            }
+
+            if ($value === null) {
+                continue;
+            }
+
+            if (is_bool($value)) {
+                self::$values[$key] = $value ? 'true' : 'false';
+                continue;
+            }
+
+            if (is_scalar($value)) {
+                self::$values[$key] = (string) $value;
+            }
+        }
+    }
 }

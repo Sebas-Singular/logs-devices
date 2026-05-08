@@ -46,6 +46,7 @@ jobs:
             .env.*
             **/.env
             **/.env.*
+            src/Config/runtime.local.php
 
             private/**
             storage/**

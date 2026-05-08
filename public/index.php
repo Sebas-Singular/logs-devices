@@ -8,6 +8,7 @@ use App\Support\Env;
 require_once __DIR__ . '/../vendor/autoload.php';
  
 Env::load(__DIR__ . '/../../../private/.env');
+Env::loadPhpConfig(__DIR__ . '/../src/Config/runtime.local.php');
  
 $appEnv = Env::get('APP_ENV', 'unknown');
 $phpVersion = PHP_VERSION;
