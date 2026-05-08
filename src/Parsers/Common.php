@@ -22,6 +22,7 @@ use DateTimeImmutable;
 // =============================================================================
  
 final class Common
+{
 
     private const PLACEHOLDER_NAMES = ['UNKNOWN', 'PENDING', ''];
  
