@@ -30,6 +30,10 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
+          port: 21
+          protocol: ftp
+          dry-run: true
+          log-level: verbose
           local-dir: ./
           server-dir: ${{ secrets.FTP_TARGET_DIR }}
           exclude: |
@@ -62,7 +66,8 @@ jobs:
             index.php
 
             README.md
-                        composer.json
+
+            composer.json
             composer.lock
             phpunit.xml
             phpunit.xml.dist
