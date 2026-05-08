@@ -264,7 +264,12 @@ function buildRejectedRelativePath(DateTimeImmutable $date): string
  
 function privateStoragePath(string $relativePath): string
 {
-    return __DIR__ . '/../../../../private/storage/' . $relativePath;
+    $basePath = Env::get(
+        'STORAGE_BASE_PATH',
+        __DIR__ . '/../../../../private/storage'
+    );
+
+    return rtrim((string) $basePath, '/\\') . '/' . ltrim($relativePath, '/\\');
 }
  
 function writeRejectedRequest(

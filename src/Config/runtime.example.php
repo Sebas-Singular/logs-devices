@@ -14,4 +14,6 @@ return [
     'DB_DATABASE' => 'logs-devices',
     'DB_USERNAME' => 'CHANGE_ME',
     'DB_PASSWORD' => 'CHANGE_ME',
+
+    'STORAGE_BASE_PATH' => dirname(__DIR__, 2) . '/storage',
 ];
