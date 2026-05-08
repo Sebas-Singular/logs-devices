@@ -210,14 +210,15 @@ final class DeviceResolver
     {
         $stmt = $this->pdo->prepare(
             'UPDATE devices
-                SET last_seen_at = :seen_at,
-                    updated_at   = :seen_at
-              WHERE id = :id'
+                SET last_seen_at = :last_seen_at,
+                    updated_at   = :updated_at
+            WHERE id = :id'
         );
 
         $stmt->execute([
-            'seen_at' => $seenAtSql,
-            'id'      => $deviceId,
+            'last_seen_at' => $seenAtSql,
+            'updated_at'   => $seenAtSql,
+            'id'           => $deviceId,
         ]);
     }
 
@@ -287,7 +288,10 @@ final class DeviceResolver
                 $row = $this->findExistingAfterRace($fields);
 
                 if ($row !== false) {
-                    return (int) $row['id'];
+                    $deviceId = (int) $row['id'];
+                    $this->updateLastSeenAt($deviceId, (string) $fields['last_seen_at']);
+
+                    return $deviceId;
                 }
             }
 
@@ -297,22 +301,42 @@ final class DeviceResolver
 
     private function findExistingAfterRace(array $fields): array|false
     {
-        if ($fields['mac_address'] !== null) {
-            return $this->findBeaconByMac($fields['mac_address']);
+        if (($fields['device_kind'] ?? null) === 'baliza') {
+            if (($fields['mac_address'] ?? null) !== null) {
+                return $this->findBeaconByMac((string) $fields['mac_address']);
+            }
+
+            if (
+                ($fields['external_id'] ?? null) !== null
+                && ($fields['parent_device_id'] ?? null) !== null
+            ) {
+                return $this->findBeaconByExternalId(
+                    (string) $fields['external_id'],
+                    (int) $fields['parent_device_id']
+                );
+            }
         }
 
-        $stmt = $this->pdo->prepare(
-            'UPDATE devices
-                SET last_seen_at = :last_seen_at,
-                    updated_at   = :updated_at
-            WHERE id = :id'
-        );
+        if (
+            ($fields['device_kind'] ?? null) === 'bridge'
+            && ($fields['external_id'] ?? null) !== null
+        ) {
+            $stmt = $this->pdo->prepare(
+                'SELECT id, name, name_origin
+                FROM devices
+                WHERE device_kind = :kind
+                AND external_id = :external_id
+                LIMIT 1'
+            );
 
-        $stmt->execute([
-            'last_seen_at' => $seenAtSql,
-            'updated_at'   => $seenAtSql,
-            'id'           => $deviceId,
-        ]);
-        return $stmt->fetch();
+            $stmt->execute([
+                'kind' => 'bridge',
+                'external_id' => $fields['external_id'],
+            ]);
+
+            return $stmt->fetch();
+        }
+
+        return false;
     }
 }

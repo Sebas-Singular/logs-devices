@@ -12,6 +12,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: pdo_mysql, mbstring, intl, zip, dom, xml, xmlwriter
+          tools: composer:v2
+
+      - name: Install production dependencies
+        run: |
+          rm -rf vendor
+          composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
+
       - name: Deploy
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
@@ -35,11 +47,11 @@ jobs:
             storage/*.json
             storage/**/*.json
             storage/logs/**
+            logs-notifications/**
 
             docs/**
             scripts/**
             tests/**
-            vendor/**
             node_modules/**
 
             docker/**
@@ -50,3 +62,8 @@ jobs:
             index.php
 
             README.md
+                        composer.json
+            composer.lock
+            phpunit.xml
+            phpunit.xml.dist
+            .phpunit.result.cache

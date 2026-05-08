@@ -274,7 +274,7 @@ function writeRejectedRequest(
 ): void {
     $relativePath = buildRejectedRelativePath($receivedAt);
     $absolutePath = privateStoragePath($relativePath);
- 
+
     $record = [
         'received_at' => $receivedAt->format('Y-m-d H:i:s'),
         'remote_addr' => $_SERVER['REMOTE_ADDR'] ?? '',
@@ -283,8 +283,8 @@ function writeRejectedRequest(
         'error' => $error,
         'raw_body' => $rawBody,
     ];
- 
+
     try {
         $writer->append($absolutePath, $record);
-    } catch (Throwable) {
+    } catch (Throwable) {}
 }

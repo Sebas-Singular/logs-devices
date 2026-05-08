@@ -15,6 +15,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         libicu-dev \
         libzip-dev \
+        libonig-dev \
+        libxml2-dev \
         zip \
         unzip \
         git \
@@ -23,6 +25,10 @@ RUN apt-get update \
         mysqli \
         intl \
         zip \
+        mbstring \
+        dom \
+        xml \
+        xmlwriter \
     && a2enmod rewrite headers \
     && rm -rf /var/lib/apt/lists/*
  

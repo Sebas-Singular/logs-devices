@@ -40,3 +40,5 @@ Desktop.ini
  
 # Logs de PHP locales
 *.log
+
+.phpunit.result.cache
