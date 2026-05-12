@@ -129,7 +129,7 @@ CREATE TABLE IF NOT EXISTS log_events (
 
   event_hash CHAR(64) NULL,
 
-  created_at DATETIME NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
   PRIMARY KEY (id),
 

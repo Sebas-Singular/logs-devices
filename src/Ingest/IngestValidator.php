@@ -74,6 +74,16 @@ final class IngestValidator
             ];
         }
 
+        $message = trim((string) ($payload['message'] ?? ''));
+
+        if ($message !== 'bridge_logs') {
+            return [
+                'status' => 422,
+                'code' => 'invalid_message',
+                'message' => 'message must be bridge_logs.',
+            ];
+        }
+
         $bridgeId = trim((string) ($payload['bridgeId'] ?? ''));
 
         if ($bridgeId === '') {

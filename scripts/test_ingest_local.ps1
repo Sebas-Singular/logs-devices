@@ -12,8 +12,8 @@ $script:Failed = 0
 function New-TestBody {
     param(
         [string]$BridgeId = "120",
-        [string]$LogText = "[2026-05-07 09:30:00] [SENSOR] INFO: [AA:BB:CC:DD:EE:FF] TELEMETRY -> T=22.5 | H=40",
-        [string]$Message = "Test batch"
+        [string]$LogText = "[2026-05-07 09:30:00] [TELEMETRY] INFO: [AA:BB:CC:DD:EE:FF] TELEMETRY -> id=01 name='Baliza Test' timestamp=2026-05-07 09:30:00 | T=22.5C H=40.00% P=935.9hPa AQ=50.0 (READY acc=1 stab=1 runin=1) alt=665m | LiDAR=5209mm | SOC=82% DISCHARGING (BAT) | RSSI=-67 | LANE=1 LOC=0 POS=-1 REF=7851 SX=103.5 SY=56.9",
+        [string]$Message = "bridge_logs"
     )
 
     $uniqueSentAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
@@ -150,6 +150,7 @@ Assert-Equal "valid POST ok=true" $response.Body.ok $true
 Assert-Equal "valid POST duplicate=false" $response.Body.duplicate $false
 Assert-True "valid POST has ingest_id" ($response.Body.ingest_id -gt 0)
 Assert-Equal "valid POST line_count=1" $response.Body.line_count 1
+Assert-Equal "valid POST parsed_error=0" $response.Body.parsed_error 0
 
 # Test 2: POST duplicado
 Write-Host ""
@@ -200,7 +201,7 @@ Write-Host ""
 Write-Host "Test 6: missing bridgeId" -ForegroundColor Cyan
 
 $missingBridgeBody = @{
-    message = "Test batch"
+    message = "bridge_logs"
     bridgeName = "WalkerPisa Bridge"
     sentAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
     fromOffset = 1
@@ -221,7 +222,7 @@ Write-Host ""
 Write-Host "Test 7: missing logText" -ForegroundColor Cyan
 
 $missingLogTextBody = @{
-    message = "Test batch"
+    message = "bridge_logs"
     bridgeId = "120"
     bridgeName = "WalkerPisa Bridge"
     sentAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
