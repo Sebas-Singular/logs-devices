@@ -42,6 +42,7 @@ try {
 ?>
 <!doctype html>
 <html lang="es">
+
 <head>
     <meta charset="utf-8">
     <title>logs-devices · Dispositivos</title>
@@ -49,6 +50,7 @@ try {
 
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
+
 <body class="min-h-screen bg-slate-100 text-slate-900">
     <header class="border-b border-slate-200 bg-white">
         <div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
@@ -65,6 +67,9 @@ try {
                 </a>
                 <a href="/devices.php" class="rounded-lg bg-slate-900 px-3 py-2 font-medium text-white">
                     Dispositivos
+                </a>
+                <a href="/events.php" class="rounded-lg px-3 py-2 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+                    Eventos
                 </a>
             </nav>
         </div>
@@ -105,10 +110,10 @@ try {
                         <tbody class="divide-y divide-slate-200 bg-white">
                             <?php foreach ($devices as $device): ?>
                                 <?php
-                                    $kind = (string) $device['device_kind'];
-                                    $eventCount = (int) ($device['event_count'] ?? 0);
-                                    $warnCount = (int) ($device['warn_count'] ?? 0);
-                                    $errorCount = (int) ($device['error_count'] ?? 0) + (int) ($device['critical_count'] ?? 0);
+                                $kind = (string) $device['device_kind'];
+                                $eventCount = (int) ($device['event_count'] ?? 0);
+                                $warnCount = (int) ($device['warn_count'] ?? 0);
+                                $errorCount = (int) ($device['error_count'] ?? 0) + (int) ($device['critical_count'] ?? 0);
                                 ?>
 
                                 <tr class="align-top hover:bg-slate-50">
@@ -120,7 +125,9 @@ try {
 
                                     <td class="px-4 py-3">
                                         <div class="font-medium text-slate-900">
-                                            <?= F::nullable($device['name'] ?? null) ?>
+                                            <a class="text-sky-700 hover:underline" href="/device.php?id=<?= F::e($device['id']) ?>">
+                                                <?= F::nullable($device['name'] ?? null) ?>
+                                            </a>
                                         </div>
                                         <div class="mt-1 text-xs text-slate-500">
                                             ID interno: <?= F::e($device['id']) ?>
@@ -192,4 +199,5 @@ try {
         <?php endif; ?>
     </main>
 </body>
+
 </html>
