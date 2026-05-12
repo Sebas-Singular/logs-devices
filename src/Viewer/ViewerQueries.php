@@ -364,6 +364,16 @@ final class ViewerQueries
             $params['parse_ok'] = (int) $filters['parse_ok'];
         }
 
+        if (!empty($filters['from'])) {
+            $where[] = 'COALESCE(le.event_timestamp, le.received_at) >= :from';
+            $params['from'] = (string) $filters['from'];
+        }
+
+        if (!empty($filters['to'])) {
+            $where[] = 'COALESCE(le.event_timestamp, le.received_at) <= :to';
+            $params['to'] = (string) $filters['to'];
+        }
+
         if (!empty($filters['device_id'])) {
             $where[] = 'le.device_id = :device_id';
             $params['device_id'] = (int) $filters['device_id'];

@@ -30,15 +30,26 @@ header('Cache-Control: no-store');
 $severity = readChoice('severity', ['', 'critical', 'error', 'warn', 'info', 'unknown']);
 $eventType = readChoice('event_type', ['', 'telemetry', 'speed', 'unknown']);
 $parseOk = readParseOk();
+$from = readDateTimeLocal('from', false);
+$to = readDateTimeLocal('to', true);
 $deviceId = readOptionalPositiveInt('device_id');
 $bridgeId = readOptionalPositiveInt('bridge_id');
 $q = readSearchText();
 $limit = readLimit();
 
+if ($from !== null && $to !== null && strtotime($from) > strtotime($to)) {
+    http_response_code(422);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo 'from must be earlier than or equal to to.';
+    exit;
+}
+
 $filters = [
     'severity' => $severity !== '' ? $severity : null,
     'event_type' => $eventType !== '' ? $eventType : null,
     'parse_ok' => $parseOk,
+    'from' => $from,
+    'to' => $to,
     'device_id' => $deviceId,
     'bridge_id' => $bridgeId,
     'q' => $q !== '' ? $q : null,
@@ -143,6 +154,26 @@ try {
                             <option value="100" <?= selectedValue($limit, 100) ?>>100</option>
                             <option value="200" <?= selectedValue($limit, 200) ?>>200</option>
                         </select>
+                    </div>
+
+                    <div>
+                        <label for="from" class="block text-sm font-medium text-slate-700">Desde</label>
+                        <input
+                            id="from"
+                            name="from"
+                            type="datetime-local"
+                            value="<?= F::e(toDateTimeLocalValue($from)) ?>"
+                            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    </div>
+
+                    <div>
+                        <label for="to" class="block text-sm font-medium text-slate-700">Hasta</label>
+                        <input
+                            id="to"
+                            name="to"
+                            type="datetime-local"
+                            value="<?= F::e(toDateTimeLocalValue($to)) ?>"
+                            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
                     </div>
 
                     <div>
@@ -403,6 +434,56 @@ function readLimit(): int
     }
 
     return (int) $value;
+}
+
+function readDateTimeLocal(string $key, bool $endOfMinute): ?string
+{
+    $raw = trim((string) ($_GET[$key] ?? ''));
+
+    if ($raw === '') {
+        return null;
+    }
+
+    $date = DateTimeImmutable::createFromFormat('Y-m-d\TH:i', $raw);
+    $errors = DateTimeImmutable::getLastErrors();
+
+    if (
+        $date === false
+        || (
+            is_array($errors)
+            && (($errors['warning_count'] ?? 0) > 0 || ($errors['error_count'] ?? 0) > 0)
+        )
+    ) {
+        http_response_code(422);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo "{$key} must have format YYYY-MM-DDTHH:MM.";
+        exit;
+    }
+
+    if ($endOfMinute) {
+        $date = $date->setTime(
+            (int) $date->format('H'),
+            (int) $date->format('i'),
+            59
+        );
+    } else {
+        $date = $date->setTime(
+            (int) $date->format('H'),
+            (int) $date->format('i'),
+            0
+        );
+    }
+
+    return $date->format('Y-m-d H:i:s');
+}
+
+function toDateTimeLocalValue(?string $value): string
+{
+    if ($value === null || trim($value) === '') {
+        return '';
+    }
+
+    return substr(str_replace(' ', 'T', $value), 0, 16);
 }
 
 function selectedValue(mixed $current, mixed $expected): string
