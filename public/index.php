@@ -60,6 +60,7 @@ $severityOrder = ['critical', 'error', 'warn', 'info', 'unknown'];
 ?>
 <!doctype html>
 <html lang="es">
+
 <head>
     <meta charset="utf-8">
     <title>logs-devices · Dashboard</title>
@@ -68,6 +69,7 @@ $severityOrder = ['critical', 'error', 'warn', 'info', 'unknown'];
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
+
 <body class="min-h-screen bg-slate-100 text-slate-900">
     <header class="border-b border-slate-200 bg-white">
         <div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
@@ -78,14 +80,28 @@ $severityOrder = ['critical', 'error', 'warn', 'info', 'unknown'];
                 </p>
             </div>
 
-            <div class="text-right text-sm text-slate-500">
-                <div>
-                    Entorno:
-                    <span class="font-semibold text-slate-700"><?= F::e($appEnv) ?></span>
-                </div>
-                <div>
-                    PHP:
-                    <span class="font-semibold text-slate-700"><?= F::e($phpVersion) ?></span>
+            <div class="flex items-center gap-6">
+                <nav class="flex items-center gap-3 text-sm">
+                    <a href="/" class="rounded-lg bg-slate-900 px-3 py-2 font-medium text-white">
+                        Dashboard
+                    </a>
+                    <a href="/devices.php" class="rounded-lg px-3 py-2 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+                        Dispositivos
+                    </a>
+                    <a href="/events.php" class="rounded-lg px-3 py-2 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+                        Eventos
+                    </a>
+                </nav>
+
+                <div class="text-right text-sm text-slate-500">
+                    <div>
+                        Entorno:
+                        <span class="font-semibold text-slate-700"><?= F::e($appEnv) ?></span>
+                    </div>
+                    <div>
+                        PHP:
+                        <span class="font-semibold text-slate-700"><?= F::e($phpVersion) ?></span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -274,4 +290,5 @@ $severityOrder = ['critical', 'error', 'warn', 'info', 'unknown'];
         <?php endif; ?>
     </main>
 </body>
+
 </html>
