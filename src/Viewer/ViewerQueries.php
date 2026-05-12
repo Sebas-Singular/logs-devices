@@ -393,6 +393,10 @@ final class ViewerQueries
             ? max(1, min((int) $filters['limit'], 200))
             : 50;
 
+        $offset = isset($filters['offset'])
+            ? max(0, (int) $filters['offset'])
+            : 0;
+
         $whereSql = $where === []
             ? ''
             : ' WHERE ' . implode(' AND ', $where);
@@ -428,7 +432,7 @@ final class ViewerQueries
            ON bridge.id = le.bridge_device_id
          {$whereSql}
          ORDER BY COALESCE(le.event_timestamp, le.received_at) DESC, le.id DESC
-         LIMIT :limit"
+         LIMIT :limit OFFSET :offset"
         );
 
         foreach ($params as $name => $value) {
@@ -440,9 +444,78 @@ final class ViewerQueries
         }
 
         $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
         $stmt->execute();
 
         return $stmt->fetchAll();
+    }
+
+    public function eventsSearchCount(array $filters): int
+    {
+        $where = [];
+        $params = [];
+
+        if (!empty($filters['severity'])) {
+            $where[] = 'le.severity = :severity';
+            $params['severity'] = (string) $filters['severity'];
+        }
+
+        if (!empty($filters['event_type'])) {
+            $where[] = 'le.event_type = :event_type';
+            $params['event_type'] = (string) $filters['event_type'];
+        }
+
+        if (array_key_exists('parse_ok', $filters) && $filters['parse_ok'] !== null) {
+            $where[] = 'le.parse_ok = :parse_ok';
+            $params['parse_ok'] = (int) $filters['parse_ok'];
+        }
+
+        if (!empty($filters['from'])) {
+            $where[] = 'COALESCE(le.event_timestamp, le.received_at) >= :from';
+            $params['from'] = (string) $filters['from'];
+        }
+
+        if (!empty($filters['to'])) {
+            $where[] = 'COALESCE(le.event_timestamp, le.received_at) <= :to';
+            $params['to'] = (string) $filters['to'];
+        }
+
+        if (!empty($filters['device_id'])) {
+            $where[] = 'le.device_id = :device_id';
+            $params['device_id'] = (int) $filters['device_id'];
+        }
+
+        if (!empty($filters['bridge_id'])) {
+            $where[] = 'le.bridge_device_id = :bridge_id';
+            $params['bridge_id'] = (int) $filters['bridge_id'];
+        }
+
+        if (!empty($filters['q'])) {
+            $where[] = 'le.message_text LIKE :q';
+            $params['q'] = '%' . (string) $filters['q'] . '%';
+        }
+
+        $whereSql = $where === []
+            ? ''
+            : ' WHERE ' . implode(' AND ', $where);
+
+        $stmt = $this->pdo->prepare(
+            "SELECT COUNT(*)
+           FROM log_events le
+           {$whereSql}"
+        );
+
+        foreach ($params as $name => $value) {
+            $stmt->bindValue(
+                ':' . $name,
+                $value,
+                is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR
+            );
+        }
+
+        $stmt->execute();
+
+        return (int) $stmt->fetchColumn();
     }
 
     private function count(string $sql): int

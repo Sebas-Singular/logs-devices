@@ -36,6 +36,8 @@ $deviceId = readOptionalPositiveInt('device_id');
 $bridgeId = readOptionalPositiveInt('bridge_id');
 $q = readSearchText();
 $limit = readLimit();
+$page = readPage();
+$offset = ($page - 1) * $limit;
 
 if ($from !== null && $to !== null && strtotime($from) > strtotime($to)) {
     http_response_code(422);
@@ -54,17 +56,29 @@ $filters = [
     'bridge_id' => $bridgeId,
     'q' => $q !== '' ? $q : null,
     'limit' => $limit,
+    'offset' => $offset,
 ];
 
 $loadError = null;
 $devices = [];
 $events = [];
+$totalEvents = 0;
+$totalPages = 1;
 
 try {
     $pdo = Connection::make();
     $queries = new ViewerQueries($pdo);
 
     $devices = $queries->devicesForFilter();
+    $totalEvents = $queries->eventsSearchCount($filters);
+    $totalPages = max(1, (int) ceil($totalEvents / $limit));
+
+    if ($page > $totalPages) {
+        $page = $totalPages;
+        $offset = ($page - 1) * $limit;
+        $filters['offset'] = $offset;
+    }
+
     $events = $queries->eventsSearch($filters);
 } catch (Throwable $exception) {
     http_response_code(500);
@@ -116,6 +130,7 @@ try {
         <?php else: ?>
             <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <form method="GET" action="/events.php" class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <input type="hidden" name="page" value="1">
                     <div>
                         <label for="severity" class="block text-sm font-medium text-slate-700">Severidad</label>
                         <select id="severity" name="severity" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
@@ -230,8 +245,37 @@ try {
                 <div class="border-b border-slate-200 px-6 py-5">
                     <h2 class="text-lg font-semibold">Resultados</h2>
                     <p class="mt-1 text-sm text-slate-500">
-                        Mostrando <?= F::number(count($events)) ?> eventos. Límite actual: <?= F::number($limit) ?>.
+                        Mostrando <?= F::number(count($events)) ?> de <?= F::number($totalEvents) ?> eventos.
+                        Página <?= F::number($page) ?> de <?= F::number($totalPages) ?>.
+                        Límite actual: <?= F::number($limit) ?>.
                     </p>
+                    <?php if ($totalPages > 1): ?>
+                        <div class="mt-4 flex flex-wrap items-center gap-3">
+                            <?php if ($page > 1): ?>
+                                <a
+                                    class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                    href="<?= F::e(eventsPageUrl($page - 1)) ?>">
+                                    ← Anterior
+                                </a>
+                            <?php else: ?>
+                                <span class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-300">
+                                    ← Anterior
+                                </span>
+                            <?php endif; ?>
+
+                            <?php if ($page < $totalPages): ?>
+                                <a
+                                    class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                    href="<?= F::e(eventsPageUrl($page + 1)) ?>">
+                                    Siguiente →
+                                </a>
+                            <?php else: ?>
+                                <span class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-300">
+                                    Siguiente →
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
                 </div>
 
                 <div class="overflow-x-auto">
@@ -484,6 +528,38 @@ function toDateTimeLocalValue(?string $value): string
     }
 
     return substr(str_replace(' ', 'T', $value), 0, 16);
+}
+
+function readPage(): int
+{
+    $raw = trim((string) ($_GET['page'] ?? ''));
+
+    if ($raw === '') {
+        return 1;
+    }
+
+    $value = filter_var($raw, FILTER_VALIDATE_INT, [
+        'options' => [
+            'min_range' => 1,
+        ],
+    ]);
+
+    if ($value === false) {
+        http_response_code(422);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'page must be a positive integer.';
+        exit;
+    }
+
+    return (int) $value;
+}
+
+function eventsPageUrl(int $page): string
+{
+    $params = $_GET;
+    $params['page'] = max(1, $page);
+
+    return '/events.php?' . http_build_query($params);
 }
 
 function selectedValue(mixed $current, mixed $expected): string
