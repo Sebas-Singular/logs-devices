@@ -10,6 +10,7 @@ use App\Support\Env;
 use App\Device\DeviceResolver;
 use App\Ingest\LogParser;
 use App\Parsers\SeverityDeriver;
+use App\Ingest\LogEventWriter;
 // -----------------------------------------------------------------------------
 // Autoloader de Composer (PSR-4).
 // Una sola línea reemplaza los 5 require_once que había antes.
@@ -241,45 +242,11 @@ try {
         receivedAt: $receivedAt,
     );
 
-    // Insertar log_events dentro de una transacción.
-    // Si una fila falla, hacemos rollback de las anteriores y marcamos el
-    // ingest como 'error'. El NDJSON crudo ya está guardado: el reproceso
-    // manual puede volver a intentarlo más tarde.
-    $eventInsertStmt = $pdo->prepare(
-        'INSERT INTO log_events (
-            ingest_id, device_id, bridge_device_id,
-            event_timestamp, received_at,
-            severity, severity_origin,
-            event_type, event_category,
-            device_mac_raw, message_text,
-            measurements, context,
-            parse_ok, parse_error,
-            quality_status, anomaly_flags,
-            event_hash, created_at
-        ) VALUES (
-            :ingest_id, :device_id, :bridge_device_id,
-            :event_timestamp, :received_at,
-            :severity, :severity_origin,
-            :event_type, :event_category,
-            :device_mac_raw, :message_text,
-            :measurements, :context,
-            :parse_ok, :parse_error,
-            :quality_status, :anomaly_flags,
-            :event_hash, :created_at
-        )
-        ON DUPLICATE KEY UPDATE id = id'
-        // ON DUPLICATE KEY: si event_hash colisiona con un evento ya existente
-        // (reproceso del mismo NDJSON, por ejemplo), no insertamos duplicado.
-        // 'UPDATE id = id' es un no-op: MariaDB no toca la fila pero tampoco
-        // lanza error. Las filas duplicadas no cuentan como insertadas.
-    );
-
     $pdo->beginTransaction();
 
     try {
-        foreach ($parseResult['events'] as $event) {
-            $eventInsertStmt->execute($event);
-        }
+        $eventWriter = new LogEventWriter($pdo);
+        $eventWriter->insertEvents($parseResult['events']);
 
         $processingFinishedAt = (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
 
