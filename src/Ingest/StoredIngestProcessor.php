@@ -52,6 +52,21 @@ final class StoredIngestProcessor
         return $stmt->fetchAll();
     }
 
+    public function countCandidates(bool $retryErrors = false): int
+    {
+        $where = $retryErrors
+            ? "status IN ('received', 'error')"
+            : "status = 'received'";
+
+        $stmt = $this->pdo->query(
+            "SELECT COUNT(*) AS total
+            FROM log_ingests
+            WHERE {$where}"
+        );
+
+        return (int) $stmt->fetchColumn();
+    }
+
     public function getIngest(int $ingestId): ?array
     {
         $stmt = $this->pdo->prepare(
