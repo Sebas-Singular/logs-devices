@@ -34,6 +34,7 @@ $from = readDateTimeLocal('from', false);
 $to = readDateTimeLocal('to', true);
 $deviceId = readOptionalPositiveInt('device_id');
 $bridgeId = readOptionalPositiveInt('bridge_id');
+$ingestId = readOptionalPositiveInt('ingest_id');
 $q = readSearchText();
 $limit = readLimit();
 $page = readPage();
@@ -54,6 +55,7 @@ $filters = [
     'to' => $to,
     'device_id' => $deviceId,
     'bridge_id' => $bridgeId,
+    'ingest_id' => $ingestId,
     'q' => $q !== '' ? $q : null,
     'limit' => $limit,
     'offset' => $offset,
@@ -217,6 +219,17 @@ try {
                             <?php endforeach; ?>
                         </select>
                     </div>
+                    <div>
+                        <label for="ingest_id" class="block text-sm font-medium text-slate-700">Ingest ID</label>
+                        <input
+                            id="ingest_id"
+                            name="ingest_id"
+                            type="number"
+                            min="1"
+                            value="<?= F::e($ingestId ?? '') ?>"
+                            placeholder="Ej: 406"
+                            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    </div>
 
                     <div class="md:col-span-2">
                         <label for="q" class="block text-sm font-medium text-slate-700">Buscar texto</label>
@@ -353,7 +366,12 @@ try {
                                     </td>
 
                                     <td class="min-w-[460px] px-4 py-3 text-slate-700">
-                                        <?= F::shortText($event['message_text'] ?? '', 320) ?>
+                                        <a class="text-sky-700 hover:underline" href="/event.php?id=<?= F::e($event['id']) ?>">
+                                            Ver detalle
+                                        </a>
+                                        <div class="mt-2">
+                                            <?= F::shortText($event['message_text'] ?? '', 320) ?>
+                                        </div>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>

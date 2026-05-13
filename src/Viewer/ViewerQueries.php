@@ -384,6 +384,11 @@ final class ViewerQueries
             $params['bridge_id'] = (int) $filters['bridge_id'];
         }
 
+        if (!empty($filters['ingest_id'])) {
+            $where[] = 'le.ingest_id = :ingest_id';
+            $params['ingest_id'] = (int) $filters['ingest_id'];
+        }
+
         if (!empty($filters['q'])) {
             $where[] = 'le.message_text LIKE :q';
             $params['q'] = '%' . (string) $filters['q'] . '%';
@@ -490,6 +495,11 @@ final class ViewerQueries
             $params['bridge_id'] = (int) $filters['bridge_id'];
         }
 
+        if (!empty($filters['ingest_id'])) {
+            $where[] = 'le.ingest_id = :ingest_id';
+            $params['ingest_id'] = (int) $filters['ingest_id'];
+        }
+
         if (!empty($filters['q'])) {
             $where[] = 'le.message_text LIKE :q';
             $params['q'] = '%' . (string) $filters['q'] . '%';
@@ -516,6 +526,76 @@ final class ViewerQueries
         $stmt->execute();
 
         return (int) $stmt->fetchColumn();
+    }
+
+    public function findEvent(int $eventId): ?array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT
+            le.id,
+            le.ingest_id,
+            le.device_id,
+            le.bridge_device_id,
+            NULL AS line_number,
+            le.event_hash,
+            le.event_timestamp,
+            le.received_at,
+            le.severity,
+            le.severity_origin,
+            le.event_type,
+            le.event_category,
+            le.device_mac_raw,
+            le.parse_ok,
+            le.parse_error,
+            le.quality_status,
+            le.anomaly_flags,
+            le.message_text,
+            le.measurements,
+            le.context,
+            le.created_at,
+
+            d.device_kind AS device_kind,
+            d.name AS device_name,
+            d.external_id AS device_external_id,
+            d.mac_address AS device_mac_address,
+
+            bridge.name AS bridge_name,
+            bridge.external_id AS bridge_external_id,
+
+            li.bridge_id_reported,
+            bridge.name AS bridge_name_reported,
+            li.received_at AS ingest_received_at,
+            li.remote_addr,
+            li.user_agent,
+            li.source_type,
+            li.source_device_id,
+            li.raw_path,
+            li.content_hash,
+            li.payload_summary,
+            li.status AS ingest_status,
+            li.line_count,
+            li.parsed_ok_count,
+            li.parsed_error_count,
+            li.processing_started_at,
+            li.processing_finished_at
+         FROM log_events le
+         LEFT JOIN devices d
+           ON d.id = le.device_id
+         LEFT JOIN devices bridge
+           ON bridge.id = le.bridge_device_id
+         LEFT JOIN log_ingests li
+           ON li.id = le.ingest_id
+         WHERE le.id = :id
+         LIMIT 1'
+        );
+
+        $stmt->execute([
+            'id' => $eventId,
+        ]);
+
+        $row = $stmt->fetch();
+
+        return $row === false ? null : $row;
     }
 
     private function count(string $sql): int

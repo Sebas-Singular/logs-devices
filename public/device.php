@@ -353,7 +353,12 @@ $severityOrder = ['critical', 'error', 'warn', 'info', 'unknown'];
                                     </td>
 
                                     <td class="min-w-[420px] px-4 py-3 text-slate-700">
-                                        <?= F::shortText($event['message_text'] ?? '', 260) ?>
+                                        <a class="text-sky-700 hover:underline" href="/event.php?id=<?= F::e($event['id']) ?>">
+                                            Ver detalle
+                                        </a>
+                                        <div class="mt-2">
+                                            <?= F::shortText($event['message_text'] ?? '', 260) ?>
+                                        </div>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
