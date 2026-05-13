@@ -6,8 +6,10 @@ use App\Database\Connection;
 use App\Http\JsonResponse;
 use App\Ingest\StoredIngestProcessor;
 use App\Support\Env;
+use App\Http\SecurityHeaders;
 
 require_once __DIR__ . '/../../../vendor/autoload.php';
+SecurityHeaders::applyJson();
 
 Env::load(__DIR__ . '/../../../../../private/.env');
 Env::loadPhpConfig(__DIR__ . '/../../../src/Config/runtime.local.php');

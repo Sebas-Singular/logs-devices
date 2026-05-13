@@ -7,6 +7,7 @@ use App\Support\Env;
 use App\Viewer\ViewerAuth;
 use App\Viewer\ViewerFormatter as F;
 use App\Viewer\ViewerQueries;
+use App\Http\SecurityHeaders;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
@@ -23,9 +24,9 @@ if (!in_array($method, ['GET', 'HEAD'], true)) {
 Env::load(__DIR__ . '/../../../private/.env');
 Env::loadPhpConfig(__DIR__ . '/../src/Config/runtime.local.php');
 
-ViewerAuth::enforce();
+SecurityHeaders::applyViewer();
 
-header('Cache-Control: no-store');
+ViewerAuth::enforce();
 
 $loadError = null;
 $devices = [];
@@ -70,6 +71,9 @@ try {
                 </a>
                 <a href="/events.php" class="rounded-lg px-3 py-2 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900">
                     Eventos
+                </a>
+                <a href="/ingests.php" class="rounded-lg px-3 py-2 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+                    Ingests
                 </a>
             </nav>
         </div>
