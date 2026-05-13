@@ -1,69 +1,40 @@
 <?php
-
+ 
 declare(strict_types=1);
-
+ 
 use App\Database\Connection;
-use App\Health\HealthReporter;
-use App\Http\SecurityHeaders;
 use App\Support\Env;
-
+ 
 require_once __DIR__ . '/../../vendor/autoload.php';
-
-SecurityHeaders::applyJson();
-
+ 
 Env::load(__DIR__ . '/../../../../private/.env');
 Env::loadPhpConfig(__DIR__ . '/../../src/Config/runtime.local.php');
-
-$appEnv = (string) (getenv('APP_ENV') ?: 'unknown');
-$storageBaseDir = __DIR__ . '/../../../../private/storage';
-
-$databaseCheck = [
+ 
+header('Content-Type: application/json; charset=utf-8');
+ 
+$response = [
     'ok' => false,
-    'message' => 'Database check failed.',
+    'app' => 'logs-devices',
+    'env' => Env::get('APP_ENV', 'unknown'),
+    'php' => PHP_VERSION,
+    'database' => 'error',
 ];
-
+ 
 try {
     $pdo = Connection::make();
-    $databaseCheck = HealthReporter::database($pdo);
+    $stmt = $pdo->query('SELECT DATABASE() AS database_name, NOW() AS database_time');
+    $row = $stmt->fetch();
+ 
+    $response['ok'] = true;
+    $response['database'] = 'ok';
+    $response['database_name'] = $row['database_name'] ?? null;
+    $response['database_time'] = $row['database_time'] ?? null;
+ 
+    http_response_code(200);
 } catch (Throwable $exception) {
-    if ($appEnv !== 'production') {
-        $databaseCheck['error_class'] = $exception::class;
-        $databaseCheck['error_message'] = $exception->getMessage();
-    }
+    $response['error'] = $exception->getMessage();
+ 
+    http_response_code(500);
 }
-
-$storageCheck = HealthReporter::storage($storageBaseDir);
-
-$criticalStorageOk = ($storageCheck['raw']['ok'] ?? false)
-    && ($storageCheck['rejected']['ok'] ?? false);
-
-$warnings = [];
-
-if (($storageCheck['archive']['ok'] ?? false) === false) {
-    $warnings[] = 'storage_archive_not_ready';
-}
-
-if (($storageCheck['rate_limit']['ok'] ?? false) === false) {
-    $warnings[] = 'storage_rate_limit_not_ready';
-}
-
-$ok = ((bool) ($databaseCheck['ok'] ?? false)) && $criticalStorageOk;
-
-http_response_code($ok ? 200 : 503);
-
-echo json_encode([
-    'ok' => $ok,
-    'app' => 'logs-devices',
-    'env' => $appEnv,
-    'php' => PHP_VERSION,
-
-    'database' => ($databaseCheck['ok'] ?? false) ? 'ok' : 'error',
-    'database_name' => $databaseCheck['database_name'] ?? null,
-    'database_time' => $databaseCheck['database_time'] ?? null,
-
-    'checks' => [
-        'database' => $databaseCheck,
-        'storage' => $storageCheck,
-    ],
-    'warnings' => $warnings,
-], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+ 
+echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);

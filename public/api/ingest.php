@@ -1,7 +1,7 @@
 <?php
-
+ 
 declare(strict_types=1);
-
+ 
 use App\Database\Connection;
 use App\Http\JsonResponse;
 use App\Ingest\IngestValidator;
@@ -11,112 +11,107 @@ use App\Device\DeviceResolver;
 use App\Ingest\LogParser;
 use App\Parsers\SeverityDeriver;
 use App\Ingest\LogEventWriter;
-use App\Http\SecurityHeaders;
-use App\Http\RateLimiter;
 // -----------------------------------------------------------------------------
 // Autoloader de Composer (PSR-4).
 // Una sola línea reemplaza los 5 require_once que había antes.
 // Carga automáticamente cualquier clase en src/ según su namespace.
 // -----------------------------------------------------------------------------
 require_once __DIR__ . '/../../vendor/autoload.php';
-
+ 
 Env::load(__DIR__ . '/../../../../private/.env');
 Env::loadPhpConfig(__DIR__ . '/../../src/Config/runtime.local.php');
-
-SecurityHeaders::applyJson();
-applyIngestRateLimit();
-
+ 
 $receivedAt = new DateTimeImmutable('now');
 $receivedAtSql = $receivedAt->format('Y-m-d H:i:s');
-
+ 
 $validator = new IngestValidator();
 $writer = new NdjsonWriter();
-
+ 
 $serverError = $validator->validateServerRequest($_SERVER);
-
+ 
 if ($serverError !== null) {
     writeRejectedRequest($writer, $receivedAt, $serverError, null);
-
+ 
     JsonResponse::send([
         'ok' => false,
         'error' => $serverError['code'],
         'message' => $serverError['message'],
     ], $serverError['status']);
 }
-
+ 
 $rawBody = file_get_contents('php://input');
-
+ 
 if ($rawBody === false || trim($rawBody) === '') {
     $error = [
         'status' => 400,
         'code' => 'empty_body',
         'message' => 'Request body is empty.',
     ];
-
+ 
     writeRejectedRequest($writer, $receivedAt, $error, null);
-
+ 
     JsonResponse::send([
         'ok' => false,
         'error' => $error['code'],
         'message' => $error['message'],
     ], $error['status']);
 }
-
+ 
 $contentHash = hash('sha256', $rawBody);
-
+ 
 $payload = json_decode($rawBody, true);
-
+ 
 if (json_last_error() !== JSON_ERROR_NONE) {
     $error = [
         'status' => 400,
         'code' => 'malformed_json',
         'message' => 'Malformed JSON: ' . json_last_error_msg(),
     ];
-
+ 
     writeRejectedRequest($writer, $receivedAt, $error, $rawBody);
-
+ 
     JsonResponse::send([
         'ok' => false,
         'error' => $error['code'],
         'message' => $error['message'],
     ], $error['status']);
 }
-
+ 
 $payloadError = $validator->validatePayload($payload);
-
+ 
 if ($payloadError !== null) {
     writeRejectedRequest($writer, $receivedAt, $payloadError, $rawBody);
-
+ 
     JsonResponse::send([
         'ok' => false,
         'error' => $payloadError['code'],
         'message' => $payloadError['message'],
     ], $payloadError['status']);
 }
-
+ 
 $bridgeId = trim((string) $payload['bridgeId']);
 $bridgeName = trim((string) ($payload['bridgeName'] ?? ''));
 $logText = (string) $payload['logText'];
-
+ 
 $rawRelativePath = buildRawRelativePath($receivedAt, $bridgeId);
 $rawAbsolutePath = privateStoragePath($rawRelativePath);
-
+ 
 try {
     $pdo = Connection::make();
-
+ 
     $existingStmt = $pdo->prepare(
         'SELECT id, received_at, raw_path
          FROM log_ingests
          WHERE content_hash = :content_hash
          LIMIT 1'
     );
-
+ 
     $existingStmt->execute([
         'content_hash' => $contentHash,
     ]);
-
+ 
     $existing = $existingStmt->fetch();
-
+ 
     if ($existing !== false) {
         JsonResponse::send([
             'ok' => true,
@@ -128,7 +123,7 @@ try {
             'content_hash' => $contentHash,
         ]);
     }
-
+ 
     $rawRecord = [
         'received_at' => $receivedAtSql,
         'remote_addr' => $_SERVER['REMOTE_ADDR'] ?? '',
@@ -136,11 +131,11 @@ try {
         'content_hash' => $contentHash,
         'payload' => $payload,
     ];
-
+ 
     $writer->append($rawAbsolutePath, $rawRecord);
-
+ 
     $lineCount = countLogLines($logText);
-
+ 
     $payloadSummary = [
         'bytes' => $payload['bytes'] ?? null,
         'fromOffset' => $payload['fromOffset'] ?? null,
@@ -149,7 +144,7 @@ try {
         'rotated' => $payload['rotated'] ?? null,
         'bridgeName' => $bridgeName !== '' ? $bridgeName : null,
     ];
-
+ 
     // -------------------------------------------------------------------------
     // Resolver el bridge antes del INSERT del ingest
     // -------------------------------------------------------------------------
@@ -309,40 +304,40 @@ try {
         'code' => 'ingest_failed',
         'message' => $exception->getMessage(),
     ];
-
+ 
     writeRejectedRequest($writer, $receivedAt, $error, $rawBody);
-
+ 
     JsonResponse::send([
         'ok' => false,
         'error' => 'ingest_failed',
         'message' => $exception->getMessage(),
     ], 500);
 }
-
+ 
 function countLogLines(string $logText): int
 {
     $lines = preg_split('/\R/', trim($logText));
-
+ 
     if ($lines === false) {
         return 0;
     }
-
+ 
     $nonEmptyLines = array_filter(
         $lines,
-        static fn(string $line): bool => trim($line) !== ''
+        static fn (string $line): bool => trim($line) !== ''
     );
-
+ 
     return count($nonEmptyLines);
 }
-
+ 
 function buildRawRelativePath(DateTimeImmutable $date, string $bridgeId): string
 {
     $safeBridgeId = preg_replace('/[^A-Za-z0-9_-]/', '_', $bridgeId);
-
+ 
     if ($safeBridgeId === null || $safeBridgeId === '') {
         $safeBridgeId = 'unknown';
     }
-
+ 
     return sprintf(
         'raw/%s/%s/%s/bridge_%s.ndjson',
         $date->format('Y'),
@@ -351,7 +346,7 @@ function buildRawRelativePath(DateTimeImmutable $date, string $bridgeId): string
         $safeBridgeId
     );
 }
-
+ 
 function buildRejectedRelativePath(DateTimeImmutable $date): string
 {
     return sprintf(
@@ -362,7 +357,7 @@ function buildRejectedRelativePath(DateTimeImmutable $date): string
         $date->format('Y-m-d')
     );
 }
-
+ 
 function privateStoragePath(string $relativePath): string
 {
     $basePath = Env::get(
@@ -372,7 +367,7 @@ function privateStoragePath(string $relativePath): string
 
     return rtrim((string) $basePath, '/\\') . '/' . ltrim($relativePath, '/\\');
 }
-
+ 
 function writeRejectedRequest(
     NdjsonWriter $writer,
     DateTimeImmutable $receivedAt,
@@ -393,88 +388,5 @@ function writeRejectedRequest(
 
     try {
         $writer->append($absolutePath, $record);
-    } catch (Throwable) {
-    }
-}
-
-function applyIngestRateLimit(): void
-{
-    if (!ingestRateLimitEnabled()) {
-        return;
-    }
-
-    $result = RateLimiter::hit(
-        storageDir: privateStoragePath('rate-limit'),
-        key: ingestRateLimitKey(),
-        maxAttempts: ingestRateLimitEnvInt('INGEST_RATE_LIMIT_MAX', 1000),
-        windowSeconds: ingestRateLimitEnvInt('INGEST_RATE_LIMIT_WINDOW_SECONDS', 600),
-    );
-
-    if ($result['allowed']) {
-        if (!headers_sent()) {
-            header('X-RateLimit-Limit: ' . $result['limit']);
-            header('X-RateLimit-Remaining: ' . $result['remaining']);
-            header('X-RateLimit-Reset: ' . $result['reset_at']);
-        }
-
-        return;
-    }
-
-    if (!headers_sent()) {
-        header('Retry-After: ' . $result['retry_after_seconds']);
-        header('X-RateLimit-Limit: ' . $result['limit']);
-        header('X-RateLimit-Remaining: 0');
-        header('X-RateLimit-Reset: ' . $result['reset_at']);
-    }
-
-    JsonResponse::send([
-        'ok' => false,
-        'error' => 'rate_limited',
-        'message' => 'Too many ingest requests. Please retry later.',
-        'retry_after_seconds' => $result['retry_after_seconds'],
-    ], 429);
-}
-
-function ingestRateLimitEnabled(): bool
-{
-    $raw = getenv('INGEST_RATE_LIMIT_ENABLED');
-
-    if ($raw === false || trim((string) $raw) === '') {
-        return true;
-    }
-
-    return in_array(strtolower(trim((string) $raw)), ['1', 'true', 'yes', 'on'], true);
-}
-
-function ingestRateLimitEnvInt(string $key, int $default): int
-{
-    $raw = getenv($key);
-
-    if ($raw === false || trim((string) $raw) === '') {
-        return $default;
-    }
-
-    $value = filter_var($raw, FILTER_VALIDATE_INT);
-
-    if ($value === false) {
-        return $default;
-    }
-
-    return max(0, (int) $value);
-}
-
-function ingestRateLimitKey(): string
-{
-    $remoteAddr = trim((string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
-    $userAgent = trim((string) ($_SERVER['HTTP_USER_AGENT'] ?? 'unknown'));
-    $authHeader = trim((string) ($_SERVER['HTTP_X_LOG_AUTH'] ?? ''));
-
-    $authMarker = $authHeader === ''
-        ? 'no-auth-header'
-        : hash('sha256', $authHeader);
-
-    return 'ingest'
-        . '|ip=' . $remoteAddr
-        . '|ua=' . $userAgent
-        . '|auth=' . $authMarker;
+    } catch (Throwable) {}
 }
