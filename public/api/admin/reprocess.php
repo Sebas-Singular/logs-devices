@@ -11,8 +11,9 @@ use App\Http\SecurityHeaders;
 require_once __DIR__ . '/../../../vendor/autoload.php';
 SecurityHeaders::applyJson();
 
-Env::load(__DIR__ . '/../../../../../private/.env');
-Env::loadPhpConfig(__DIR__ . '/../../../src/Config/runtime.local.php');
+use App\Support\Bootstrap;
+
+Bootstrap::init();
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     JsonResponse::send([

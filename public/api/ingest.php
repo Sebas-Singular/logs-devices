@@ -6,7 +6,7 @@ use App\Database\Connection;
 use App\Http\JsonResponse;
 use App\Ingest\IngestValidator;
 use App\Storage\NdjsonWriter;
-use App\Support\Env;
+use App\Storage\Paths;
 use App\Device\DeviceResolver;
 use App\Ingest\LogParser;
 use App\Parsers\SeverityDeriver;
@@ -20,8 +20,9 @@ use App\Http\RateLimiter;
 // -----------------------------------------------------------------------------
 require_once __DIR__ . '/../../vendor/autoload.php';
 
-Env::load(__DIR__ . '/../../../../private/.env');
-Env::loadPhpConfig(__DIR__ . '/../../src/Config/runtime.local.php');
+use App\Support\Bootstrap;
+
+Bootstrap::init();
 
 SecurityHeaders::applyJson();
 applyIngestRateLimit();
@@ -99,7 +100,7 @@ $bridgeName = trim((string) ($payload['bridgeName'] ?? ''));
 $logText = (string) $payload['logText'];
 
 $rawRelativePath = buildRawRelativePath($receivedAt, $bridgeId);
-$rawAbsolutePath = privateStoragePath($rawRelativePath);
+$rawAbsolutePath = Paths::for($rawRelativePath);
 
 try {
     $pdo = Connection::make();
@@ -363,16 +364,6 @@ function buildRejectedRelativePath(DateTimeImmutable $date): string
     );
 }
 
-function privateStoragePath(string $relativePath): string
-{
-    $basePath = Env::get(
-        'STORAGE_BASE_PATH',
-        __DIR__ . '/../../../../private/storage'
-    );
-
-    return rtrim((string) $basePath, '/\\') . '/' . ltrim($relativePath, '/\\');
-}
-
 function writeRejectedRequest(
     NdjsonWriter $writer,
     DateTimeImmutable $receivedAt,
@@ -380,7 +371,7 @@ function writeRejectedRequest(
     ?string $rawBody
 ): void {
     $relativePath = buildRejectedRelativePath($receivedAt);
-    $absolutePath = privateStoragePath($relativePath);
+    $absolutePath = Paths::for($relativePath);
 
     $record = [
         'received_at' => $receivedAt->format('Y-m-d H:i:s'),
@@ -404,7 +395,7 @@ function applyIngestRateLimit(): void
     }
 
     $result = RateLimiter::hit(
-        storageDir: privateStoragePath('rate-limit'),
+        storageDir: Paths::for('rate-limit'),
         key: ingestRateLimitKey(),
         maxAttempts: ingestRateLimitEnvInt('INGEST_RATE_LIMIT_MAX', 1000),
         windowSeconds: ingestRateLimitEnvInt('INGEST_RATE_LIMIT_WINDOW_SECONDS', 600),

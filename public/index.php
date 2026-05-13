@@ -11,6 +11,8 @@ use App\Http\SecurityHeaders;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
+use App\Support\Bootstrap;
+
 $method = (string) ($_SERVER['REQUEST_METHOD'] ?? 'GET');
 
 if ($method === 'POST') {
@@ -26,8 +28,7 @@ if (!in_array($method, ['GET', 'HEAD'], true)) {
     exit;
 }
 
-Env::load(__DIR__ . '/../../../private/.env');
-Env::loadPhpConfig(__DIR__ . '/../src/Config/runtime.local.php');
+Bootstrap::init();
 
 SecurityHeaders::applyViewer();
 

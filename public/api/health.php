@@ -5,17 +5,18 @@ declare(strict_types=1);
 use App\Database\Connection;
 use App\Health\HealthReporter;
 use App\Http\SecurityHeaders;
-use App\Support\Env;
+use App\Storage\Paths;
 
 require_once __DIR__ . '/../../vendor/autoload.php';
 
 SecurityHeaders::applyJson();
 
-Env::load(__DIR__ . '/../../../../private/.env');
-Env::loadPhpConfig(__DIR__ . '/../../src/Config/runtime.local.php');
+use App\Support\Bootstrap;
+
+Bootstrap::init();
 
 $appEnv = (string) (getenv('APP_ENV') ?: 'unknown');
-$storageBaseDir = __DIR__ . '/../../../../private/storage';
+$storageBaseDir = rtrim(Paths::for(''), '/\\');
 
 $databaseCheck = [
     'ok' => false,

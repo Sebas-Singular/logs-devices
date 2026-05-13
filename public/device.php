@@ -21,8 +21,9 @@ if (!in_array($method, ['GET', 'HEAD'], true)) {
     exit;
 }
 
-Env::load(__DIR__ . '/../../../private/.env');
-Env::loadPhpConfig(__DIR__ . '/../src/Config/runtime.local.php');
+use App\Support\Bootstrap;
+
+Bootstrap::init();
 
 SecurityHeaders::applyViewer();
 

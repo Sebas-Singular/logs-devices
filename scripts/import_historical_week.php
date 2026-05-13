@@ -2,11 +2,12 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../src/Support/Env.php';
-
+use App\Support\Bootstrap;
 use App\Support\Env;
 
-Env::load(__DIR__ . '/../../../private/.env');
+require_once __DIR__ . '/../vendor/autoload.php';
+
+Bootstrap::init();
 
 $options = getopt('', [
     'file::',

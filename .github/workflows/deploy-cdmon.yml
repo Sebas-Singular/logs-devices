@@ -32,7 +32,7 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           port: 21
           protocol: ftp
-          #dry-run: true
+          dry-run: true
           log-level: verbose
           local-dir: ./
           server-dir: ${{ secrets.FTP_TARGET_DIR }}
@@ -46,11 +46,19 @@ jobs:
             .env.*
             **/.env
             **/.env.*
+
+            src/Config/runtime.php
+            src/Config/runtime.php.*
             src/Config/runtime.local.php
+            src/Config/runtime.local.php.*
 
             private/**
-            storage/**
             logs-notifications/**
+
+            storage/raw/**
+            storage/rejected/**
+            storage/archive/**
+            storage/rate-limit/**
 
             docs/**
             scripts/**

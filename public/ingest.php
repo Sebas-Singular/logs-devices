@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 use App\Database\Connection;
-use App\Support\Env;
+use App\Storage\Paths;
 use App\Viewer\ViewerAuth;
 use App\Viewer\ViewerFormatter as F;
 use App\Viewer\ViewerQueries;
@@ -22,8 +22,9 @@ if (!in_array($method, ['GET', 'HEAD'], true)) {
     exit;
 }
 
-Env::load(__DIR__ . '/../../../private/.env');
-Env::loadPhpConfig(__DIR__ . '/../src/Config/runtime.local.php');
+use App\Support\Bootstrap;
+
+Bootstrap::init();
 
 SecurityHeaders::applyViewer();
 applyIngestRateLimit();
@@ -366,7 +367,7 @@ function applyIngestRateLimit(): void
         return;
     }
 
-    $storageDir = __DIR__ . '/../../../../private/storage/rate-limit';
+    $storageDir = Paths::for('rate-limit');
 
     $result = RateLimiter::hit(
         storageDir: $storageDir,

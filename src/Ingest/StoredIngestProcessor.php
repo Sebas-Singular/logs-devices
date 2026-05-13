@@ -24,7 +24,7 @@ final class StoredIngestProcessor
         $this->storageBasePath = rtrim(
             $storageBasePath ?? (string) Env::get(
                 'STORAGE_BASE_PATH',
-                dirname(__DIR__, 4) . '/private/storage'
+                dirname(__DIR__, 2) . '/storage'
             ),
             '/\\'
         );

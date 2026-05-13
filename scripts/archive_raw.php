@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
+use App\Storage\Paths;
 use App\Storage\RawArchiveManager;
-use App\Support\Env;
+use App\Support\Bootstrap;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-Env::load(__DIR__ . '/../../../private/.env');
-Env::loadPhpConfig(__DIR__ . '/../src/Config/runtime.local.php');
+Bootstrap::init();
 
 $options = getopt('', [
     'execute',
@@ -22,7 +22,7 @@ $deleteSource = array_key_exists('delete-source', $options);
 $minAgeDays = readPositiveIntOption($options, 'min-age-days', 7, 1, 3650);
 $limit = readPositiveIntOption($options, 'limit', 100, 1, 500);
 
-$storageBaseDir = __DIR__ . '/../../../private/storage';
+$storageBaseDir = rtrim(Paths::for(''), '/\\');
 
 echo "logs-devices raw archive\n";
 echo 'Mode: ' . ($execute ? 'execute' : 'dry-run') . PHP_EOL;

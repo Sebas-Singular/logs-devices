@@ -44,3 +44,4 @@ Desktop.ini
 .phpunit.result.cache
 
 src/Config/runtime.local.php
+src/Config/runtime.php

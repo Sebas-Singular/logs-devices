@@ -1,8 +1,42 @@
 Options -Indexes
 
-RedirectMatch 404 ^/(src|vendor)(/|$)
-RedirectMatch 404 ^/(storage|logs-notifications|docs|tests|scripts)(/|$)
+RewriteEngine On
+RewriteBase /
 
-<FilesMatch "(^\.|composer\.(json|lock)|phpunit\.xml(\.dist)?|\.phpunit\.result\.cache)">
-Require all denied
-</FilesMatch>
+# -----------------------------------------------------------------------------
+# Bloqueo de directorios no públicos.
+# Aunque el hosting sirva este subdirectorio como raíz del subdominio, estas
+# carpetas nunca deben poder descargarse por HTTP.
+# -----------------------------------------------------------------------------
+RewriteRule ^(?:src|vendor|storage|scripts|docs|tests|private|logs-notifications)(?:/|$) - [F,L,NC]
+
+# Bloqueo de dotfiles: .git, .env, .htaccess, .phpunit.result.cache, etc.
+RewriteRule (^|/)\. - [F,L]
+
+# Bloqueo de ficheros sensibles habituales en raíz.
+RewriteRule ^(?:composer\.(?:json|lock)|phpunit\.xml(?:\.dist)?|docker-compose\.ya?ml|README\.md)$ - [F,L,NC]
+
+# -----------------------------------------------------------------------------
+# Rutas públicas del visor.
+# Se usan rewrites internos: la URL externa no cambia.
+# QSA conserva query strings como /device.php?id=123.
+# -----------------------------------------------------------------------------
+RewriteRule ^$ public/index.php [L,QSA]
+RewriteRule ^index\.php$ public/index.php [L,QSA]
+
+RewriteRule ^devices\.php$ public/devices.php [L,QSA]
+RewriteRule ^device\.php$ public/device.php [L,QSA]
+RewriteRule ^events\.php$ public/events.php [L,QSA]
+RewriteRule ^event\.php$ public/event.php [L,QSA]
+RewriteRule ^ingests\.php$ public/ingests.php [L,QSA]
+RewriteRule ^ingest\.php$ public/ingest.php [L,QSA]
+
+# -----------------------------------------------------------------------------
+# Endpoints API.
+# -----------------------------------------------------------------------------
+RewriteRule ^api/ingest\.php$ public/api/ingest.php [L,QSA]
+RewriteRule ^api/health\.php$ public/api/health.php [L,QSA]
+RewriteRule ^api/admin/reprocess\.php$ public/api/admin/reprocess.php [L,QSA]
+RewriteRule ^api/admin/archive_raw\.php$ public/api/admin/archive_raw.php [L,QSA]
+
+# Cualquier otra ruta queda como 404 controlado por Apache.

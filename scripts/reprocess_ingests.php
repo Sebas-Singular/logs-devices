@@ -8,8 +8,9 @@ use App\Support\Env;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-Env::load(__DIR__ . '/../../../private/.env');
-Env::loadPhpConfig(__DIR__ . '/../src/Config/runtime.local.php');
+use App\Support\Bootstrap;
+
+Bootstrap::init();
 
 $options = getopt('', [
     'limit::',

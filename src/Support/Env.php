@@ -11,7 +11,7 @@ final class Env
     public static function load(string $path): void
     {
         self::$values = [];
-        
+
         if (!is_file($path)) {
             return;
         }
@@ -78,6 +78,13 @@ final class Env
             if (is_scalar($value)) {
                 self::$values[$key] = (string) $value;
             }
+        }
+    }
+
+    public static function setDefault(string $key, string $value): void
+    {
+        if (!array_key_exists($key, self::$values)) {
+            self::$values[$key] = $value;
         }
     }
 }

@@ -3,15 +3,15 @@
 declare(strict_types=1);
 
 use App\Http\SecurityHeaders;
+use App\Storage\Paths;
 use App\Storage\RawArchiveManager;
-use App\Support\Env;
+use App\Support\Bootstrap;
 
 require_once __DIR__ . '/../../../vendor/autoload.php';
 
 SecurityHeaders::applyJson();
 
-Env::load(__DIR__ . '/../../../../../private/.env');
-Env::loadPhpConfig(__DIR__ . '/../../../src/Config/runtime.local.php');
+Bootstrap::init();
 
 $method = (string) ($_SERVER['REQUEST_METHOD'] ?? 'GET');
 
@@ -72,7 +72,7 @@ if (!$execute && $deleteSource) {
     exit;
 }
 
-$storageBaseDir = __DIR__ . '/../../../../../private/storage';
+$storageBaseDir = rtrim(Paths::for(''), '/\\');
 
 try {
     $manager = new RawArchiveManager();
