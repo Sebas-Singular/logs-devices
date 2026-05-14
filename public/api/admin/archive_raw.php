@@ -6,6 +6,7 @@ use App\Http\SecurityHeaders;
 use App\Storage\Paths;
 use App\Storage\RawArchiveManager;
 use App\Support\Bootstrap;
+use App\Support\Env
 
 require_once __DIR__ . '/../../../vendor/autoload.php';
 
@@ -40,7 +41,7 @@ if (!archiveEndpointEnabled()) {
     exit;
 }
 
-$expectedToken = (string) (getenv('ADMIN_TOKEN') ?: '');
+$expectedToken = (string) Env::get('ADMIN_REPROCESS_TOKEN', '');
 $providedToken = (string) ($_SERVER['HTTP_X_ADMIN_TOKEN'] ?? '');
 
 if ($expectedToken === '' || !hash_equals($expectedToken, $providedToken)) {
@@ -100,10 +101,10 @@ try {
 
 function archiveEndpointEnabled(): bool
 {
-    $raw = getenv('ARCHIVE_RAW_ENDPOINT_ENABLED');
+    $raw = Env::get('ARCHIVE_RAW_ENDPOINT_ENABLED');
 
-    if ($raw === false || trim((string) $raw) === '') {
-        return false;
+    if ($raw === null || trim((string) $raw) === '') {
+    return false;
     }
 
     return in_array(strtolower(trim((string) $raw)), ['1', 'true', 'yes', 'on'], true);

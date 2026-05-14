@@ -13,6 +13,8 @@ use App\Parsers\SeverityDeriver;
 use App\Ingest\LogEventWriter;
 use App\Http\SecurityHeaders;
 use App\Http\RateLimiter;
+use App\Support\Env;
+use App\Support\Bootstrap;
 // -----------------------------------------------------------------------------
 // Autoloader de Composer (PSR-4).
 // Una sola línea reemplaza los 5 require_once que había antes.
@@ -20,7 +22,6 @@ use App\Http\RateLimiter;
 // -----------------------------------------------------------------------------
 require_once __DIR__ . '/../../vendor/autoload.php';
 
-use App\Support\Bootstrap;
 
 Bootstrap::init();
 
@@ -428,9 +429,9 @@ function applyIngestRateLimit(): void
 
 function ingestRateLimitEnabled(): bool
 {
-    $raw = getenv('INGEST_RATE_LIMIT_ENABLED');
+    $raw = Env::get('INGEST_RATE_LIMIT_ENABLED');
 
-    if ($raw === false || trim((string) $raw) === '') {
+    if ($raw === null || trim((string) $raw) === '') {
         return true;
     }
 
@@ -439,9 +440,9 @@ function ingestRateLimitEnabled(): bool
 
 function ingestRateLimitEnvInt(string $key, int $default): int
 {
-    $raw = getenv($key);
+    $raw = Env::get($key);
 
-    if ($raw === false || trim((string) $raw) === '') {
+    if ($raw === null || trim((string) $raw) === '') {
         return $default;
     }
 

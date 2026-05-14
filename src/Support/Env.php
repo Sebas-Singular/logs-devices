@@ -38,6 +38,10 @@ final class Env
             $key = trim($parts[0]);
             $value = trim($parts[1]);
 
+            if ($key === '') {
+                continue;
+            }
+
             $value = trim($value, "\"'");
 
             self::$values[$key] = $value;
@@ -46,7 +50,17 @@ final class Env
 
     public static function get(string $key, ?string $default = null): ?string
     {
-        return self::$values[$key] ?? $_ENV[$key] ?? getenv($key) ?: $default;
+        if (array_key_exists($key, self::$values)) {
+            return self::$values[$key];
+        }
+
+        if (array_key_exists($key, $_ENV)) {
+            return is_scalar($_ENV[$key]) ? (string) $_ENV[$key] : $default;
+        }
+
+        $env = getenv($key);
+
+        return $env !== false ? (string) $env : $default;
     }
 
     public static function loadPhpConfig(string $path): void
@@ -62,7 +76,7 @@ final class Env
         }
 
         foreach ($values as $key => $value) {
-            if (!is_string($key)) {
+            if (!is_string($key) || $key === '') {
                 continue;
             }
 
@@ -71,13 +85,16 @@ final class Env
             }
 
             if (is_bool($value)) {
-                self::$values[$key] = $value ? 'true' : 'false';
+                $stringValue = $value ? 'true' : 'false';
+            } elseif (is_scalar($value)) {
+                $stringValue = (string) $value;
+            } else {
                 continue;
             }
 
-            if (is_scalar($value)) {
-                self::$values[$key] = (string) $value;
-            }
+            self::$values[$key] = $stringValue;
+            $_ENV[$key] = $stringValue;
+            putenv($key . '=' . $stringValue);
         }
     }
 

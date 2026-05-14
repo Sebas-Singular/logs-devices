@@ -6,16 +6,16 @@ use App\Database\Connection;
 use App\Health\HealthReporter;
 use App\Http\SecurityHeaders;
 use App\Storage\Paths;
+use App\Support\Bootstrap;
+use App\Support\Env;
 
 require_once __DIR__ . '/../../vendor/autoload.php';
 
 SecurityHeaders::applyJson();
 
-use App\Support\Bootstrap;
-
 Bootstrap::init();
 
-$appEnv = (string) (getenv('APP_ENV') ?: 'unknown');
+$appEnv = (string) Env::get('APP_ENV', 'unknown');
 $storageBaseDir = rtrim(Paths::for(''), '/\\');
 
 $databaseCheck = [

@@ -9,6 +9,8 @@ use App\Viewer\ViewerFormatter as F;
 use App\Viewer\ViewerQueries;
 use App\Http\SecurityHeaders;
 use App\Http\RateLimiter;
+use App\Support\Env;
+use App\Support\Bootstrap;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
@@ -21,8 +23,6 @@ if (!in_array($method, ['GET', 'HEAD'], true)) {
     echo 'Method not allowed.';
     exit;
 }
-
-use App\Support\Bootstrap;
 
 Bootstrap::init();
 
@@ -406,9 +406,9 @@ function applyIngestRateLimit(): void
 
 function ingestRateLimitEnabled(): bool
 {
-    $raw = getenv('INGEST_RATE_LIMIT_ENABLED');
+    $raw = Env::get('INGEST_RATE_LIMIT_ENABLED');
 
-    if ($raw === false || trim((string) $raw) === '') {
+    if ($raw === null || trim((string) $raw) === '') {
         return true;
     }
 
@@ -417,9 +417,9 @@ function ingestRateLimitEnabled(): bool
 
 function ingestRateLimitEnvInt(string $key, int $default): int
 {
-    $raw = getenv($key);
+    $raw = Env::get($key);
 
-    if ($raw === false || trim((string) $raw) === '') {
+    if ($raw === null || trim((string) $raw) === '') {
         return $default;
     }
 

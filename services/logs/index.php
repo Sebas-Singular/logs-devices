@@ -280,22 +280,32 @@ function forward_bridge_logs_to_ingest_with_stream($endpoint, $secret, $json)
 }
 
 /*
+    RUNTIME CONFIG
+*/
+require_once __DIR__ . '/../../vendor/autoload.php';
+\App\Support\Bootstrap::init();
+
+/*
     USER AGENT VALIDATION
 */
-if (!isset($_SERVER['HTTP_USER_AGENT']) || $_SERVER['HTTP_USER_AGENT'] != "WalkerPisa-Bridge-Logs") {
+$expected_user_agent = (string) \App\Support\Env::get('LOG_INGEST_USER_AGENT', 'WalkerPisa-Bridge-Logs');
+$provided_user_agent = (string) ($_SERVER['HTTP_USER_AGENT'] ?? '');
+
+if ($expected_user_agent === '' || $provided_user_agent !== $expected_user_agent) {
     send_forbidden("Invalid source.");
     exit;
 }
 
 /*
     SHARED SECRET VALIDATION
-    Header esperado: X-Log-Auth: tu-secreto
+    Header esperado: X-Log-Auth: valor actual de LOG_INGEST_SECRET en runtime.php
 */
-$expected_auth = "WalkerPisaLogs-2026-ST";
-$forward_ingest_enabled = true;
-$forward_ingest_endpoint = "https://logs.singularthings.io/api/ingest.php";
+$expected_auth = (string) \App\Support\Env::get('LOG_INGEST_SECRET', '');
+$forward_ingest_enabled = ((string) \App\Support\Env::get('LEGACY_FORWARD_ENABLED', 'true')) !== 'false';
+$forward_ingest_endpoint = rtrim((string) \App\Support\Env::get('APP_URL', 'https://logs.singularthings.io'), '/') . '/api/ingest.php';
+$provided_auth = (string) ($_SERVER['HTTP_X_LOG_AUTH'] ?? '');
 
-if (!isset($_SERVER['HTTP_X_LOG_AUTH']) || $_SERVER['HTTP_X_LOG_AUTH'] !== $expected_auth) {
+if ($expected_auth === '' || !hash_equals($expected_auth, $provided_auth)) {
     send_forbidden("Invalid auth.");
     exit;
 }
