@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Http\JsonResponse;
 use App\Http\SecurityHeaders;
+use App\Storage\Paths;
 use App\Support\Bootstrap;
 use App\Support\Env;
 
@@ -48,8 +49,8 @@ if ($providedToken === '' || !hash_equals($expectedToken, $providedToken)) {
 }
 
 $execute = readBoolQuery('execute', false);
-$limit = readIntQuery('limit', 10, 1, 50);
-$offset = readIntQuery('offset', 0, 0, PHP_INT_MAX);
+$limit = readIntQuery('limit', 20, 1, 50);
+$fileName = readFileName();
 
 $sourceDir = rtrim(
     (string) Env::get(
@@ -68,35 +69,33 @@ if (!is_dir($sourceDir)) {
     ], 500);
 }
 
-$fileName = readFileName();
+$statePath = Paths::for('services-import-state.json');
+$state = readState($statePath);
 
 try {
-    $filePath = $fileName !== null
-        ? resolveRequestedFile($sourceDir, $fileName)
-        : findLatestBridgeLogFile($sourceDir);
+    $files = $fileName !== null
+        ? [resolveRequestedFile($sourceDir, $fileName)]
+        : findBridgeLogFiles($sourceDir);
 
-    $data = readBridgeLogFile($filePath);
-    $uploads = $data['uploads'];
-
-    if (!$execute) {
-        JsonResponse::send([
-            'ok' => true,
-            'mode' => 'dry-run',
-            'source_dir' => $sourceDir,
-            'file' => basename($filePath),
-            'uploads_total' => count($uploads),
-            'offset' => $offset,
-            'limit' => $limit,
-            'next_offset' => min(count($uploads), $offset + $limit),
-            'message' => 'Dry-run only. Add execute=1 to import.',
-        ]);
-    }
+    $summary = [
+        'ok' => true,
+        'mode' => $execute ? 'execute' : 'dry-run',
+        'source_dir' => $sourceDir,
+        'state_path' => $statePath,
+        'limit' => $limit,
+        'processed_attempts' => 0,
+        'created' => 0,
+        'duplicates' => 0,
+        'failed' => 0,
+        'skipped' => 0,
+        'files' => [],
+    ];
 
     $endpoint = rtrim((string) Env::get('APP_URL'), '/') . '/api/ingest.php';
     $secret = (string) Env::get('LOG_INGEST_SECRET', '');
     $userAgent = (string) Env::get('LOG_INGEST_USER_AGENT', 'WalkerPisa-Bridge-Logs');
 
-    if ($endpoint === '/api/ingest.php' || $secret === '') {
+    if ($execute && ($endpoint === '/api/ingest.php' || $secret === '')) {
         JsonResponse::send([
             'ok' => false,
             'error' => 'import_not_configured',
@@ -104,94 +103,139 @@ try {
         ], 500);
     }
 
-    $results = [];
-    $sent = 0;
-    $created = 0;
-    $duplicates = 0;
-    $failed = 0;
-    $skipped = 0;
+    foreach ($files as $filePath) {
+        if ($summary['processed_attempts'] >= $limit) {
+            break;
+        }
 
-    $totalUploads = count($uploads);
-    $end = min($totalUploads, $offset + $limit);
+        $baseName = basename($filePath);
 
-    for ($index = $offset; $index < $end; $index++) {
-        $upload = $uploads[$index] ?? null;
-
-        if (!is_array($upload) || !isset($upload['payload']) || !is_array($upload['payload'])) {
-            $skipped++;
-
-            $results[] = [
-                'index' => $index,
-                'outcome' => 'skipped',
-                'reason' => 'missing_payload',
+        if (!isFileStable($filePath)) {
+            $summary['files'][] = [
+                'file' => $baseName,
+                'status' => 'skipped',
+                'reason' => 'file_recently_modified',
             ];
-
             continue;
         }
 
-        $payload = $upload['payload'];
-        $response = postJson($endpoint, $payload, $userAgent, $secret);
+        $data = readBridgeLogFile($filePath);
+        $uploads = $data['uploads'];
+        $totalUploads = count($uploads);
 
-        $sent++;
+        $fileState = $state['files'][$baseName] ?? [];
+        $nextIndex = max(0, (int) ($fileState['next_index'] ?? 0));
 
-        $body = $response['json'];
+        $fileResult = [
+            'file' => $baseName,
+            'week' => $data['week'] ?? null,
+            'updated_at' => $data['updated_at'] ?? null,
+            'uploads_total' => $totalUploads,
+            'next_index_before' => $nextIndex,
+            'pending_before' => max(0, $totalUploads - $nextIndex),
+            'processed_attempts' => 0,
+            'created' => 0,
+            'duplicates' => 0,
+            'failed' => 0,
+            'skipped' => 0,
+            'next_index_after' => $nextIndex,
+            'results' => [],
+        ];
 
-        if ($response['http_status'] >= 200 && $response['http_status'] < 300 && is_array($body)) {
-            if (($body['duplicate'] ?? false) === true) {
-                $duplicates++;
+        if (!$execute) {
+            $summary['files'][] = $fileResult;
+            continue;
+        }
 
-                $results[] = [
-                    'index' => $index,
-                    'outcome' => 'duplicate',
-                    'bridge_id' => $payload['bridgeId'] ?? null,
-                    'ingest_id' => $body['ingest_id'] ?? null,
+        while ($nextIndex < $totalUploads && $summary['processed_attempts'] < $limit) {
+            $upload = $uploads[$nextIndex] ?? null;
+
+            if (!is_array($upload) || !isset($upload['payload']) || !is_array($upload['payload'])) {
+                $fileResult['skipped']++;
+                $summary['skipped']++;
+
+                $fileResult['results'][] = [
+                    'index' => $nextIndex,
+                    'outcome' => 'skipped',
+                    'reason' => 'missing_payload',
                 ];
 
+                $nextIndex++;
                 continue;
             }
 
-            $created++;
+            $payload = $upload['payload'];
+            $response = postJson($endpoint, $payload, $userAgent, $secret);
 
-            $results[] = [
-                'index' => $index,
-                'outcome' => 'created',
+            $summary['processed_attempts']++;
+            $fileResult['processed_attempts']++;
+
+            $body = $response['json'];
+
+            if ($response['http_status'] >= 200 && $response['http_status'] < 300 && is_array($body)) {
+                if (($body['duplicate'] ?? false) === true) {
+                    $summary['duplicates']++;
+                    $fileResult['duplicates']++;
+
+                    $fileResult['results'][] = [
+                        'index' => $nextIndex,
+                        'outcome' => 'duplicate',
+                        'bridge_id' => $payload['bridgeId'] ?? null,
+                        'ingest_id' => $body['ingest_id'] ?? null,
+                    ];
+                } else {
+                    $summary['created']++;
+                    $fileResult['created']++;
+
+                    $fileResult['results'][] = [
+                        'index' => $nextIndex,
+                        'outcome' => 'created',
+                        'bridge_id' => $payload['bridgeId'] ?? null,
+                        'ingest_id' => $body['ingest_id'] ?? null,
+                        'line_count' => $body['line_count'] ?? null,
+                        'parsed_ok' => $body['parsed_ok'] ?? null,
+                        'parsed_error' => $body['parsed_error'] ?? null,
+                    ];
+                }
+
+                $nextIndex++;
+                continue;
+            }
+
+            $summary['failed']++;
+            $fileResult['failed']++;
+
+            $fileResult['results'][] = [
+                'index' => $nextIndex,
+                'outcome' => 'failed',
                 'bridge_id' => $payload['bridgeId'] ?? null,
-                'ingest_id' => $body['ingest_id'] ?? null,
-                'line_count' => $body['line_count'] ?? null,
-                'parsed_ok' => $body['parsed_ok'] ?? null,
-                'parsed_error' => $body['parsed_error'] ?? null,
+                'http_status' => $response['http_status'],
+                'body' => truncateString($response['body'], 1000),
             ];
 
-            continue;
+            break;
         }
 
-        $failed++;
+        $fileResult['next_index_after'] = $nextIndex;
+        $fileResult['pending_after'] = max(0, $totalUploads - $nextIndex);
 
-        $results[] = [
-            'index' => $index,
-            'outcome' => 'failed',
-            'bridge_id' => $payload['bridgeId'] ?? null,
-            'http_status' => $response['http_status'],
-            'body' => $response['body'],
+        $state['files'][$baseName] = [
+            'next_index' => $nextIndex,
+            'uploads_total_last_seen' => $totalUploads,
+            'updated_at_last_seen' => $data['updated_at'] ?? null,
+            'last_imported_at' => (new DateTimeImmutable('now'))->format(DATE_ATOM),
         ];
+
+        $summary['files'][] = $fileResult;
     }
 
-    JsonResponse::send([
-        'ok' => $failed === 0,
-        'mode' => 'execute',
-        'source_dir' => $sourceDir,
-        'file' => basename($filePath),
-        'uploads_total' => $totalUploads,
-        'offset' => $offset,
-        'limit' => $limit,
-        'next_offset' => $end < $totalUploads ? $end : null,
-        'sent' => $sent,
-        'created' => $created,
-        'duplicates' => $duplicates,
-        'failed' => $failed,
-        'skipped' => $skipped,
-        'results' => $results,
-    ], $failed > 0 ? 500 : 200);
+    if ($execute) {
+        writeState($statePath, $state);
+    }
+
+    $summary['ok'] = $summary['failed'] === 0;
+
+    JsonResponse::send($summary, $summary['failed'] > 0 ? 500 : 200);
 } catch (Throwable $exception) {
     JsonResponse::send([
         'ok' => false,
@@ -284,7 +328,7 @@ function resolveRequestedFile(string $sourceDir, string $fileName): string
     return $filePath;
 }
 
-function findLatestBridgeLogFile(string $sourceDir): string
+function findBridgeLogFiles(string $sourceDir): array
 {
     $files = glob($sourceDir . '/bridge_logs_*.json');
 
@@ -297,12 +341,20 @@ function findLatestBridgeLogFile(string $sourceDir): string
         ], 404);
     }
 
-    usort(
-        $files,
-        static fn(string $a, string $b): int => filemtime($b) <=> filemtime($a)
-    );
+    sort($files, SORT_NATURAL);
 
-    return $files[0];
+    return $files;
+}
+
+function isFileStable(string $filePath): bool
+{
+    $modifiedAt = filemtime($filePath);
+
+    if ($modifiedAt === false) {
+        return false;
+    }
+
+    return $modifiedAt <= time() - 3;
 }
 
 function readBridgeLogFile(string $filePath): array
@@ -326,12 +378,59 @@ function readBridgeLogFile(string $filePath): array
     return $data;
 }
 
+function readState(string $statePath): array
+{
+    if (!is_file($statePath)) {
+        return ['files' => []];
+    }
+
+    $raw = file_get_contents($statePath);
+
+    if ($raw === false || trim($raw) === '') {
+        return ['files' => []];
+    }
+
+    $state = json_decode($raw, true);
+
+    if (!is_array($state)) {
+        return ['files' => []];
+    }
+
+    if (!isset($state['files']) || !is_array($state['files'])) {
+        $state['files'] = [];
+    }
+
+    return $state;
+}
+
+function writeState(string $statePath, array $state): void
+{
+    $dir = dirname($statePath);
+
+    if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+        throw new RuntimeException('Unable to create state directory.');
+    }
+
+    $json = json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+    if ($json === false) {
+        throw new RuntimeException('Unable to encode import state.');
+    }
+
+    $tmpPath = $statePath . '.tmp';
+
+    if (file_put_contents($tmpPath, $json . PHP_EOL, LOCK_EX) === false) {
+        throw new RuntimeException('Unable to write temporary import state.');
+    }
+
+    if (!rename($tmpPath, $statePath)) {
+        throw new RuntimeException('Unable to replace import state file.');
+    }
+}
+
 function postJson(string $endpoint, array $payload, string $userAgent, string $secret): array
 {
-    $json = json_encode(
-        $payload,
-        JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
-    );
+    $json = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
     if ($json === false) {
         return [
@@ -388,4 +487,13 @@ function extractHttpStatus(array $headers): int
     }
 
     return (int) $matches[1];
+}
+
+function truncateString(string $value, int $maxLength): string
+{
+    if (strlen($value) <= $maxLength) {
+        return $value;
+    }
+
+    return substr($value, 0, $maxLength) . '...';
 }

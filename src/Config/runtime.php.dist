@@ -38,6 +38,10 @@ return [
     'ADMIN_REPROCESS_TOKEN'       => 'CHANGE_ME',
     'ARCHIVE_RAW_ENDPOINT_ENABLED' => 'false',
 
+    // ===== Importador desde services/logs/storage =====
+    'SERVICES_LOGS_IMPORT_ENABLED' => 'false',
+    'SERVICES_LOGS_STORAGE_PATH' => dirname(__DIR__, 2) . '/services/logs/storage',
+
     // ===== Rate limiting de ingesta =====
     'INGEST_RATE_LIMIT_ENABLED'         => 'true',
     'INGEST_RATE_LIMIT_MAX'             => '1000',

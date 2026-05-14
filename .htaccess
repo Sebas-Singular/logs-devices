@@ -3,11 +3,16 @@ Options -Indexes
 RewriteEngine On
 RewriteBase /
 
+# Preserve Authorization header for PHP-FPM / FastCGI environments.
+RewriteCond %{HTTP:Authorization} .
+RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
 # -----------------------------------------------------------------------------
 # Bloqueo de directorios no públicos.
 # Aunque el hosting sirva este subdirectorio como raíz del subdominio, estas
 # carpetas nunca deben poder descargarse por HTTP.
 # -----------------------------------------------------------------------------
+RewriteRule ^services/logs/storage(?:/|$) - [F,L,NC]
 RewriteRule ^(?:src|vendor|storage|scripts|docs|tests|private|logs-notifications)(?:/|$) - [F,L,NC]
 
 # Bloqueo de dotfiles: .git, .env, .htaccess, .phpunit.result.cache, etc.
@@ -38,5 +43,6 @@ RewriteRule ^api/ingest\.php$ public/api/ingest.php [L,QSA]
 RewriteRule ^api/health\.php$ public/api/health.php [L,QSA]
 RewriteRule ^api/admin/reprocess\.php$ public/api/admin/reprocess.php [L,QSA]
 RewriteRule ^api/admin/archive_raw\.php$ public/api/admin/archive_raw.php [L,QSA]
+RewriteRule ^api/admin/import_services_logs\.php$ public/api/admin/import_services_logs.php [L,QSA]
 
 # Cualquier otra ruta queda como 404 controlado por Apache.
