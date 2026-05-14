@@ -45,3 +45,5 @@ Desktop.ini
 
 src/Config/runtime.local.php
 src/Config/runtime.php
+# Logs from external notification/backend services
+logs-notifications/

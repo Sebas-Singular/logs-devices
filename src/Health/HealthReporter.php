@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Health;
 
 use PDO;
-use Throwable;
 
 final class HealthReporter
 {
@@ -43,57 +42,29 @@ final class HealthReporter
     public static function storage(string $baseDir): array
     {
         return [
-            'base' => self::directory($baseDir, writeProbe: false),
-            'raw' => self::directory($baseDir . '/raw', writeProbe: true),
-            'rejected' => self::directory($baseDir . '/rejected', writeProbe: true),
-            'archive' => self::directory($baseDir . '/archive', writeProbe: true),
-            'rate_limit' => self::directory($baseDir . '/rate-limit', writeProbe: true),
+            'base' => self::directory($baseDir),
+            'raw' => self::directory($baseDir . '/raw'),
+            'rejected' => self::directory($baseDir . '/rejected'),
+            'archive' => self::directory($baseDir . '/archive'),
+            'rate_limit' => self::directory($baseDir . '/rate-limit'),
         ];
     }
 
-    private static function directory(string $path, bool $writeProbe): array
+    private static function directory(string $path): array
     {
         $exists = is_dir($path);
         $readable = $exists && is_readable($path);
         $writable = $exists && is_writable($path);
-        $writeTest = false;
 
-        if ($exists && $writable && $writeProbe) {
-            $writeTest = self::writeProbe($path);
-        }
-
-        $ok = $exists
-            && $readable
-            && $writable
-            && (!$writeProbe || $writeTest);
+        $ok = $exists && $readable && $writable;
 
         return [
             'ok' => $ok,
             'exists' => $exists,
             'readable' => $readable,
             'writable' => $writable,
-            'write_test' => $writeProbe ? $writeTest : null,
+            'write_test' => null,
+            'write_probe' => 'disabled',
         ];
-    }
-
-    private static function writeProbe(string $directory): bool
-    {
-        $filePath = rtrim($directory, '/\\') . '/.healthcheck_' . bin2hex(random_bytes(8)) . '.tmp';
-
-        try {
-            $written = file_put_contents($filePath, 'ok ' . date('c'), LOCK_EX);
-
-            if ($written === false) {
-                return false;
-            }
-
-            return @unlink($filePath);
-        } catch (Throwable) {
-            if (is_file($filePath)) {
-                @unlink($filePath);
-            }
-
-            return false;
-        }
     }
 }
