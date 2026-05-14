@@ -5,7 +5,7 @@ on:
 
 jobs:
   ftp-deploy:
-    name: Upload web files by FTP
+    name: Upload web files by FTPS
     runs-on: ubuntu-latest
 
     steps:
@@ -31,7 +31,8 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           port: 21
-          protocol: ftp
+          protocol: ftps
+          security: strict
           #dry-run: true
           log-level: verbose
           local-dir: ./

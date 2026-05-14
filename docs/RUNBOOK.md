@@ -427,13 +427,6 @@ Estructura esperada en servidor:
 
 ```text
 /usr/home/singularthings.io/
-├── private/
-│   ├── .env
-│   └── storage/
-│       ├── raw/
-│       ├── rejected/
-│       ├── archive/
-│       └── rate-limit/
 └── web/
     └── logs-devices/
         ├── public/
@@ -450,9 +443,20 @@ Estructura esperada en servidor:
         │       └── admin/
         │           ├── reprocess.php
         │           └── archive_raw.php
+        ├── storage/
+        │        ├── raw/
+        │        ├── rejected/
+        │        ├── archive/
+        │        └── rate-limit/
+        │
+        ├── services/
+        │        └── logs/
+        │              ├──index.php
+        │              └──storage/
         ├── src/
         ├── vendor/
         └── composer.json
+        
 2. Endpoints principales
 Viewer
 
@@ -741,22 +745,29 @@ El rate limiting protege:
 POST /
 POST /api/ingest.php
 
-Configuración recomendada:
+## Configuración de runtime
 
-INGEST_RATE_LIMIT_ENABLED=true
-INGEST_RATE_LIMIT_MAX=1000
-INGEST_RATE_LIMIT_WINDOW_SECONDS=600
+La configuración vive en `src/Config/runtime.php` (NO versionado, NO desplegado por FTP).
 
-Respuesta si se supera el límite:
+Para crear/actualizar:
+1. Conéctate por FTP a la raíz del subdominio.
+2. Sube manualmente `src/Config/runtime.php` con los valores reales.
+3. El archivo lo ignora `.gitignore` y lo excluye el workflow de deploy.
 
-HTTP 429 Too Many Requests
-error = rate_limited
+Variables obligatorias (validadas en Bootstrap::init):
+- APP_ENV, LOG_INGEST_SECRET, LOG_INGEST_USER_AGENT
+- DB_HOST, DB_DATABASE, DB_USERNAME, DB_PASSWORD
 
-En caso de emergencia, se puede desactivar temporalmente:
+Variables opcionales:
+- VIEWER_AUTH_ENABLED (default true), VIEWER_AUTH_USERNAME, VIEWER_AUTH_PASSWORD
+- REPROCESS_ENABLED (default false), ADMIN_REPROCESS_TOKEN
+- ARCHIVE_RAW_ENDPOINT_ENABLED (default false)
+- SERVICES_LOGS_IMPORT_ENABLED (default false), SERVICES_LOGS_STORAGE_PATH
+- INGEST_RATE_LIMIT_ENABLED (default true), INGEST_RATE_LIMIT_MAX (1000), INGEST_RATE_LIMIT_WINDOW_SECONDS (600)
+- STORAGE_BASE_PATH (default: <project_root>/storage)
 
-INGEST_RATE_LIMIT_ENABLED=false
-
-Después de diagnosticar, volver a activarlo.
+NB: NUNCA editar directamente desde phpMyAdmin ni un editor externo sin
+backup — runtime.php es la única barrera entre el dashboard y el dominio.
 
 9. Investigación de errores de parseo
 Ver eventos con error
