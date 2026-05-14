@@ -1,94 +1,48 @@
 # logs-devices — Runbook operativo
 
-Runbook de operación para la aplicación `logs-devices`.
+Aplicación interna de Singular Things para recibir, almacenar, parsear y visualizar logs de bridges/balizas IoT del proyecto WalkerPisa.
 
-La aplicación recibe logs HTTP de bridges/dispositivos, guarda el payload crudo en NDJSON, registra el POST en `log_ingests`, parsea líneas en `log_events`, resuelve dispositivos en `devices` y ofrece un viewer web protegido.
+## 1. Producción
 
----
+URL principal:
 
-## 1. Entorno de producción
+````text
+https://logs.singularthings.io/
 
-Hosting confirmado:
+Restricciones reales del hosting:
 
-- Proveedor: CDMon Senior
-- Acceso: FTP + phpMyAdmin
-- Sin SSH
-- Sin Docker
-- Sin Python/Node persistente
-- Backend: PHP 8.3
-- Base de datos: MariaDB
-- Despliegue: GitHub Actions → FTP
+Proveedor: CDmon Senior
+Acceso: FTP + phpMyAdmin
+Sin SSH operativo confirmado
+Sin Docker en producción
+Sin cron
+Sin workers persistentes
+Sin acceso server-level
+PHP 8.3
+MariaDB
 
-Estructura esperada en servidor:
+El proyecto vive dentro de la raíz del subdominio. No se asume acceso a una carpeta private externa.
 
-```text
-/usr/home/singularthings.io/
-├── private/
-│   ├── .env
-│   └── storage/
-│       ├── raw/
-│       ├── rejected/
-│       ├── archive/
-│       └── rate-limit/
-└── web/
-    └── logs-devices/
-        ├── public/
-        │   ├── index.php
-        │   ├── devices.php
-        │   ├── device.php
-        │   ├── events.php
-        │   ├── event.php
-        │   ├── ingests.php
-        │   ├── ingest.php
-        │   └── api/
-        │       ├── ingest.php
-        │       ├── health.php
-        │       └── admin/
-        │           ├── reprocess.php
-        │           └── archive_raw.php
-        ├── src/
-        ├── vendor/
-        └── composer.json
-2. Endpoints principales
-Viewer
+2. Configuración
 
-Protegido con HTTP Basic Auth.
+La configuración real de producción se lee desde:
 
-GET /
-GET /devices.php
-GET /device.php?id=<device_id>
-GET /events.php
-GET /event.php?id=<event_id>
-GET /ingests.php
-GET /ingest.php?id=<ingest_id>
-Ingesta
+src/Config/runtime.php
 
-Contrato externo de bridges.
+Ese fichero:
 
-POST /
-POST /api/ingest.php
+No se versiona
+No se despliega por GitHub Actions
+Debe subirse/editarse manualmente por FTP cuando haga falta
 
-Ambos deben seguir funcionando. POST / existe por compatibilidad con bridges que envían directamente a la raíz del dominio.
+Template versionado:
 
-Healthcheck
-GET /api/health.php
-Administración
+src/Config/runtime.php.dist
 
-Desactivados por defecto salvo activación explícita en .env.
-
-POST /api/admin/reprocess.php
-POST /api/admin/archive_raw.php
-3. Variables de entorno
-
-Los secretos deben vivir fuera del repo, en:
-
-/private/.env
-
-No guardar secretos en Git.
-
-Variables relevantes:
+Variables principales:
 
 APP_ENV=production
+APP_URL=https://logs.singularthings.io
 
 DB_HOST=...
 DB_PORT=...
@@ -96,723 +50,318 @@ DB_DATABASE=...
 DB_USERNAME=...
 DB_PASSWORD=...
 
-INGEST_SECRET=...
-ADMIN_TOKEN=...
+LOG_INGEST_SECRET=...
+LOG_INGEST_USER_AGENT=WalkerPisa-Bridge-Logs
 
-VIEWER_BASIC_USER=...
-VIEWER_BASIC_PASSWORD=...
+VIEWER_AUTH_ENABLED=true
+VIEWER_AUTH_USERNAME=...
+VIEWER_AUTH_PASSWORD=...
 
-REPROCESS_ENDPOINT_ENABLED=false
+ADMIN_REPROCESS_TOKEN=...
+
+REPROCESS_ENABLED=false
 ARCHIVE_RAW_ENDPOINT_ENABLED=false
+SERVICES_LOGS_IMPORT_ENABLED=false
 
 INGEST_RATE_LIMIT_ENABLED=true
 INGEST_RATE_LIMIT_MAX=1000
 INGEST_RATE_LIMIT_WINDOW_SECONDS=600
 
-Los nombres exactos deben coincidir con los usados por el código actual del proyecto. No copiar valores reales a documentación, issues, prompts ni chats.
+LEGACY_FORWARD_ENABLED=true
 
-4. Checklist después de cada despliegue
+No usar nombres antiguos como:
 
-Tras un despliegue a CDMon, comprobar:
+INGEST_SECRET
+ADMIN_TOKEN
+VIEWER_BASIC_USER
+VIEWER_BASIC_PASSWORD
+3. Endpoints
 
-4.1. Healthcheck
-curl.exe -i "https://logs.singularthings.io/api/health.php"
+Viewer protegido por HTTP Basic Auth:
+
+GET /
+GET /index.php
+GET /devices.php
+GET /device.php?id=<id>
+GET /events.php
+GET /event.php?id=<id>
+GET /ingests.php
+GET /ingest.php?id=<id>
+
+API pública reducida:
+
+GET /api/health.php
+
+API full protegida por token admin:
+
+GET /api/health.php?mode=full
+Header: X-Admin-Token: <ADMIN_REPROCESS_TOKEN>
+
+Ingesta nueva:
+
+POST /api/ingest.php
+
+Ingesta legacy usada por bridges desplegados:
+
+POST /services/logs/index.php
+
+Contrato legacy externo que no debe romperse sin coordinar firmware:
+
+User-Agent: WalkerPisa-Bridge-Logs
+X-Log-Auth: <LOG_INGEST_SECRET>
+Content-Type: application/json
+4. Seguridad HTTP
+
+La raíz tiene .htaccess con:
+
+Options -Indexes
+Bloqueo de src/
+Bloqueo de vendor/
+Bloqueo de storage/
+Bloqueo de services/logs/storage/
+Bloqueo de scripts/
+Bloqueo de docs/
+Bloqueo de tests/
+Bloqueo de private/
+Bloqueo de dotfiles
+Whitelist defensiva de rutas públicas
+Bloqueo de acceso directo a /public
+
+Rutas que deben estar bloqueadas:
+
+/src/Config/runtime.php
+/vendor/autoload.php
+/storage/raw/
+/services/logs/storage/
+/composer.json
+/.env
+/.git/config
+/private/.env
+/scripts/reprocess_ingests.php
+/docs/RUNBOOK.md
+/tests/bootstrap.php
+/home.html
+/random.php
+/api/random.php
+/public/index.php
+/public/api/health.php
+5. Deploy
+
+Deploy actual:
+
+GitHub Actions → FTP
+
+El intento de FTPS explícito falló contra el host actual:
+
+AUTH TLS
+500 AUTH not understood
+
+Puerto observado:
+
+21 abierto
+990 cerrado
+22 abierto pendiente de confirmar
+
+Hasta que CDmon confirme SFTP/FTPS usable, el deploy sigue por FTP plano. Si se consigue SFTP/FTPS, cambiar el workflow y rotar credenciales.
+
+El deploy excluye:
+
+src/Config/runtime.php
+storage/**
+services/logs/storage/**
+private/**
+docs/**
+scripts/**
+tests/**
+logs-notifications/**
+composer.json
+composer.lock
+index.php raíz
+6. CI
+
+Hay workflow de tests:
+
+.github/workflows/test.yml
+
+Corre en:
+
+push
+pull_request
+
+El deploy manual también ejecuta PHPUnit antes de subir por FTP. Si PHPUnit falla, no hay deploy.
+
+7. Smoke tests Windows PowerShell
+
+Definir variables:
+
+$BASE = "https://logs.singularthings.io"
+$VIEWER_USER = "USUARIO"
+$VIEWER_PASSWORD = "PASSWORD"
+$AUTH = "$($VIEWER_USER):$($VIEWER_PASSWORD)"
+
+Viewer:
+
+curl.exe -sS -o NUL -w "%{http_code}`n" -u "$AUTH" "$BASE/"
+curl.exe -sS -o NUL -w "%{http_code}`n" -u "$AUTH" "$BASE/devices.php"
+curl.exe -sS -o NUL -w "%{http_code}`n" -u "$AUTH" "$BASE/events.php"
+curl.exe -sS -o NUL -w "%{http_code}`n" -u "$AUTH" "$BASE/ingests.php"
 
 Esperado:
 
-HTTP/1.1 200
-"ok": true
-"database": "ok"
+200
+200
+200
+200
 
-Revisar también:
+Health público:
 
-checks.database.ok
-checks.storage.raw.ok
-checks.storage.rejected.ok
-warnings
-
-archive y rate_limit pueden aparecer como warning, pero conviene corregirlos.
-
-4.2. Viewer protegido
-
-Sin credenciales:
-
-curl.exe -i "https://logs.singularthings.io/events.php"
+curl.exe -sS "$BASE/api/health.php"
 
 Esperado:
 
-401 Unauthorized
-
-Con credenciales:
-
-curl.exe -i -u "USUARIO:PASSWORD" "https://logs.singularthings.io/events.php?limit=5"
-
-Esperado:
-
-200 OK
-4.3. Ingesta compatible
-
-Con payload de prueba controlado:
-
-curl.exe -i -X POST "https://logs.singularthings.io/api/ingest.php" `
-  -H "Content-Type: application/json" `
-  -H "User-Agent: WalkerPisa-Bridge-Logs" `
-  -H "X-Log-Auth: <INGEST_SECRET>" `
-  --data-binary "@test-production-payload.json"
-
-Esperado en payload nuevo:
-
-"ok": true
-"duplicate": false
-"message": "Payload received and processed."
-
-Esperado si el payload ya existía:
-
-"ok": true
-"duplicate": true
-"message": "Payload already received."
-4.4. Ingesta legacy en raíz
-curl.exe -i -X POST "https://logs.singularthings.io/" `
-  -H "Content-Type: application/json" `
-  -H "User-Agent: WalkerPisa-Bridge-Logs" `
-  -H "X-Log-Auth: <INGEST_SECRET>" `
-  --data-binary "@test-production-payload.json"
-
-Debe responder igual que /api/ingest.php.
-
-5. Interpretación del healthcheck
-Estado sano
 {
   "ok": true,
-  "database": "ok"
+  "app": "logs-devices",
+  "mode": "public",
+  "env": "production",
+  "database": "ok",
+  "storage": "ok"
 }
 
-Además:
+Health full:
 
-checks.storage.raw.ok = true
-checks.storage.rejected.ok = true
-BD fallando
+$ADMIN_REPROCESS_TOKEN = "TOKEN_REAL"
 
-Síntomas:
+curl.exe -sS `
+  -H "X-Admin-Token: $ADMIN_REPROCESS_TOKEN" `
+  "$BASE/api/health.php?mode=full"
+8. Smoke test de ingestión legacy
+$BASE = "https://logs.singularthings.io"
+$LOG_INGEST_SECRET = "SECRETO_REAL"
 
-HTTP 503
-"database": "error"
-checks.database.ok = false
+$payloadPath = "$env:TEMP\legacy-smoke.json"
 
-Acciones:
+$body = @{
+  message = "bridge_error"
+  bridgeId = "99"
+  bridgeName = "Runbook Smoke"
+  errorText = "Runbook smoke test"
+} | ConvertTo-Json -Compress
 
-Revisar credenciales en /private/.env.
-Comprobar en phpMyAdmin si la base existe.
-Comprobar que las tablas existen:
-devices
-log_ingests
-log_events
-No tocar bridges hasta confirmar que el endpoint no puede escribir.
-Cuando vuelva la BD, probar /api/health.php.
-Storage raw fallando
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllText($payloadPath, $body, $utf8NoBom)
 
-Síntomas:
+curl.exe -i -X POST `
+  -H "User-Agent: WalkerPisa-Bridge-Logs" `
+  -H "X-Log-Auth: $LOG_INGEST_SECRET" `
+  -H "Content-Type: application/json" `
+  --data-binary "@$payloadPath" `
+  "$BASE/services/logs/index.php"
 
-HTTP 503
-checks.storage.raw.ok = false
+Esperado:
 
-Acciones:
+HTTP 200
+"ok": true
+"stored": true
+9. Smoke test de ingestión nueva
+$BASE = "https://logs.singularthings.io"
+$LOG_INGEST_SECRET = "SECRETO_REAL"
+$payloadPath = "$env:TEMP\api-ingest-smoke.json"
+$timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss")
 
-Revisar que existe:
+$logText = "[$timestamp] [TELEMETRY] INFO: [ff:ff:ff:00:00:99] TELEMETRY -> id=99 name='Runbook Smoke' timestamp=$timestamp | T=20.0C H=50.0% P=1013.0hPa AQ=100.0 (READY acc=3 stab=1 runin=1)"
 
-/private/storage/raw
-Revisar permisos de escritura.
-Revisar que PHP puede crear archivos.
-No activar archivado mientras raw falle.
-Reprobar /api/health.php.
-Storage rejected fallando
+$body = @{
+  message = "bridge_logs"
+  bridgeId = "99"
+  bridgeName = "Runbook Smoke"
+  logText = $logText
+} | ConvertTo-Json -Compress
 
-Síntomas:
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllText($payloadPath, $body, $utf8NoBom)
 
-HTTP 503
-checks.storage.rejected.ok = false
+curl.exe -i -X POST `
+  -H "User-Agent: WalkerPisa-Bridge-Logs" `
+  -H "X-Log-Auth: $LOG_INGEST_SECRET" `
+  -H "Content-Type: application/json" `
+  --data-binary "@$payloadPath" `
+  "$BASE/api/ingest.php"
 
-Acciones:
+Esperado:
 
-Revisar que existe:
+HTTP 200
+"ok": true
+10. Admin endpoints
 
-/private/storage/rejected
-Revisar permisos de escritura.
-Corregir antes de considerar producción sana.
-Rate-limit storage fallando
-
-Síntomas:
-
-warnings contiene storage_rate_limit_not_ready
-
-Acciones:
-
-Revisar:
-
-/private/storage/rate-limit
-Revisar permisos.
-La ingesta no debería pararse por esto porque el rate limiter trabaja en modo fail-open.
-6. Reprocess de ingests
-
-El reprocess permite procesar ingests ya guardados.
-
-Endpoint:
+Reprocess:
 
 POST /api/admin/reprocess.php
 
-Debe estar desactivado por defecto:
-
-REPROCESS_ENDPOINT_ENABLED=false
-Activar temporalmente
-
-En /private/.env:
-
-REPROCESS_ENDPOINT_ENABLED=true
-
-Después de usarlo, volver a:
-
-REPROCESS_ENDPOINT_ENABLED=false
-Ejecutar batch
-curl.exe -i -X POST "https://logs.singularthings.io/api/admin/reprocess.php?limit=10" `
-  -H "X-Admin-Token: <ADMIN_TOKEN>"
-Reprocesar un ingest concreto
-curl.exe -i -X POST "https://logs.singularthings.io/api/admin/reprocess.php?id=406&force=1" `
-  -H "X-Admin-Token: <ADMIN_TOKEN>"
-Seguridad
-
-No dejar el endpoint activado permanentemente salvo decisión explícita.
-
-7. Archivado de raw NDJSON
-
-El archivado comprime ficheros antiguos de:
-
-/private/storage/raw/
-
-hacia:
-
-/private/storage/archive/raw/
-
-Ejemplo:
-
-raw/2026/05/07/bridge_120.ndjson
-archive/raw/2026/05/07/bridge_120.ndjson.gz
-
-Endpoint:
+Archive raw:
 
 POST /api/admin/archive_raw.php
 
-Debe estar desactivado por defecto:
+Import services logs:
 
-ARCHIVE_RAW_ENDPOINT_ENABLED=false
-Activar temporalmente
+POST /api/admin/import_services_logs.php
 
-En /private/.env:
+Todos deben requerir:
 
-ARCHIVE_RAW_ENDPOINT_ENABLED=true
+X-Admin-Token: <ADMIN_REPROCESS_TOKEN>
 
-Después de usarlo:
+Y deben estar desactivados por defecto salvo necesidad operativa.
 
-ARCHIVE_RAW_ENDPOINT_ENABLED=false
-Dry-run remoto
-curl.exe -i -X POST "https://logs.singularthings.io/api/admin/archive_raw.php?limit=20&min_age_days=7" `
-  -H "X-Admin-Token: <ADMIN_TOKEN>"
+11. Backups
 
-No modifica ficheros.
+Antes de cualquier cambio SQL en producción:
 
-Ejecución real
-curl.exe -i -X POST "https://logs.singularthings.io/api/admin/archive_raw.php?execute=1&delete_source=1&limit=20&min_age_days=7" `
-  -H "X-Admin-Token: <ADMIN_TOKEN>"
+phpMyAdmin → Export → SQL completo → guardar fuera del hosting
 
-Recomendación:
+Recomendación operativa mínima:
 
-Hacer primero dry-run.
-Revisar resultados.
-Ejecutar con límite pequeño.
-Repetir si todo está correcto.
-Desactivar endpoint al terminar.
-8. Rate limiting de ingesta
+Backup manual mensual de la BD
+Backup antes de migraciones SQL
+Guardar copia en Drive/S3 privado de empresa
+12. Troubleshooting rápido
 
-El rate limiting protege:
+Si /api/health.php devuelve 503:
 
-POST /
-POST /api/ingest.php
+Revisar DB en mode=full
+Revisar storage raw/rejected
+No tocar bridges hasta confirmar causa
 
-Configuración recomendada:
+Si llegan ingests pero no eventos:
 
-INGEST_RATE_LIMIT_ENABLED=true
-INGEST_RATE_LIMIT_MAX=1000
-INGEST_RATE_LIMIT_WINDOW_SECONDS=600
+Abrir /ingests.php
+Abrir detalle del ingest
+Revisar status, line_count, parsed_ok_count, parsed_error_count
+Buscar eventos con parse_ok=0
 
-Respuesta si se supera el límite:
+Si el legacy responde 403:
 
-HTTP 429 Too Many Requests
-error = rate_limited
+Comprobar User-Agent
+Comprobar X-Log-Auth
+Comprobar LOG_INGEST_SECRET en runtime.php
 
-En caso de emergencia, se puede desactivar temporalmente:
+Si el deploy falla:
 
-INGEST_RATE_LIMIT_ENABLED=false
-
-Después de diagnosticar, volver a activarlo.
-
-9. Investigación de errores de parseo
-Ver eventos con error
-/events.php?parse_ok=0
-Ver detalle de un evento
-/event.php?id=<event_id>
-
-Revisar:
-
-parse_error
-message_text
-measurements
-context
-ingest
-bridge
-Ver ingest que produjo el evento
-
-Desde event.php, usar el enlace al ingest.
-
-O directamente:
-
-/ingest.php?id=<ingest_id>
-Ver todos los eventos del ingest
-/events.php?ingest_id=<ingest_id>
-10. Investigación por dispositivo
-Listado
-/devices.php
-Detalle
-/device.php?id=<device_id>
-Eventos de un dispositivo
-/events.php?device_id=<device_id>
-Eventos de un bridge
-/events.php?bridge_id=<bridge_device_id>
-11. Qué hacer si llegan logs pero no aparecen eventos
-Comprobar /api/health.php.
-Ver /ingests.php.
-Buscar ingests recientes.
-Abrir el detalle del ingest.
-Comprobar:
-status
-line_count
-parsed_ok_count
-parsed_error_count
-raw_path
-Si status está en received, usar reprocess.
-Si status está en error, revisar mensaje asociado o reprocesar con cuidado.
-Si hay parse errors, revisar /events.php?parse_ok=0.
-```
-
-# logs-devices — Runbook operativo
-
-Runbook de operación para la aplicación `logs-devices`.
-
-La aplicación recibe logs HTTP de bridges/dispositivos, guarda el payload crudo en NDJSON, registra el POST en `log_ingests`, parsea líneas en `log_events`, resuelve dispositivos en `devices` y ofrece un viewer web protegido.
+Revisar job PHPUnit before deploy
+Si PHPUnit falla, corregir código antes de desplegar
+Si FTP falla, revisar credenciales FTP/secrets GitHub/CDmon
 
 ---
 
-## 1. Entorno de producción
+# Verificación local
 
-Hosting confirmado:
+```powershell
+php -l .\src\Ingest\LogEventWriter.php
+php -l .\tests\Ingest\LogEventWriterTest.php
 
-- Proveedor: CDMon Senior
-- Acceso: FTP + phpMyAdmin
-- Sin SSH
-- Sin Docker
-- Sin Python/Node persistente
-- Backend: PHP 8.3
-- Base de datos: MariaDB
-- Despliegue: GitHub Actions → FTP
+vendor\bin\phpunit .\tests\Ingest\LogEventWriterTest.php
+vendor\bin\phpunit
 
-Estructura esperada en servidor:
+Comprueba que el writer ya no tiene el insert por evento:
+````
 
-```text
-/usr/home/singularthings.io/
-└── web/
-    └── logs-devices/
-        ├── public/
-        │   ├── index.php
-        │   ├── devices.php
-        │   ├── device.php
-        │   ├── events.php
-        │   ├── event.php
-        │   ├── ingests.php
-        │   ├── ingest.php
-        │   └── api/
-        │       ├── ingest.php
-        │       ├── health.php
-        │       └── admin/
-        │           ├── reprocess.php
-        │           └── archive_raw.php
-        ├── storage/
-        │        ├── raw/
-        │        ├── rejected/
-        │        ├── archive/
-        │        └── rate-limit/
-        │
-        ├── services/
-        │        └── logs/
-        │              ├──index.php
-        │              └──storage/
-        ├── src/
-        ├── vendor/
-        └── composer.json
-        
-2. Endpoints principales
-Viewer
-
-Protegido con HTTP Basic Auth.
-
-GET /
-GET /devices.php
-GET /device.php?id=<device_id>
-GET /events.php
-GET /event.php?id=<event_id>
-GET /ingests.php
-GET /ingest.php?id=<ingest_id>
-Ingesta
-
-Contrato externo de bridges.
-
-POST /
-POST /api/ingest.php
-
-Ambos deben seguir funcionando. POST / existe por compatibilidad con bridges que envían directamente a la raíz del dominio.
-
-Healthcheck
-GET /api/health.php
-Administración
-
-Desactivados por defecto salvo activación explícita en .env.
-
-POST /api/admin/reprocess.php
-POST /api/admin/archive_raw.php
-3. Variables de entorno
-
-Los secretos deben vivir fuera del repo, en:
-
-/private/.env
-
-No guardar secretos en Git.
-
-Variables relevantes:
-
-APP_ENV=production
-
-DB_HOST=...
-DB_PORT=...
-DB_DATABASE=...
-DB_USERNAME=...
-DB_PASSWORD=...
-
-INGEST_SECRET=...
-ADMIN_TOKEN=...
-
-VIEWER_BASIC_USER=...
-VIEWER_BASIC_PASSWORD=...
-
-REPROCESS_ENDPOINT_ENABLED=false
-ARCHIVE_RAW_ENDPOINT_ENABLED=false
-
-INGEST_RATE_LIMIT_ENABLED=true
-INGEST_RATE_LIMIT_MAX=1000
-INGEST_RATE_LIMIT_WINDOW_SECONDS=600
-
-Los nombres exactos deben coincidir con los usados por el código actual del proyecto. No copiar valores reales a documentación, issues, prompts ni chats.
-
-4. Checklist después de cada despliegue
-
-Tras un despliegue a CDMon, comprobar:
-
-4.1. Healthcheck
-curl.exe -i "https://logs.singularthings.io/api/health.php"
-
-Esperado:
-
-HTTP/1.1 200
-"ok": true
-"database": "ok"
-
-Revisar también:
-
-checks.database.ok
-checks.storage.raw.ok
-checks.storage.rejected.ok
-warnings
-
-archive y rate_limit pueden aparecer como warning, pero conviene corregirlos.
-
-4.2. Viewer protegido
-
-Sin credenciales:
-
-curl.exe -i "https://logs.singularthings.io/events.php"
-
-Esperado:
-
-401 Unauthorized
-
-Con credenciales:
-
-curl.exe -i -u "USUARIO:PASSWORD" "https://logs.singularthings.io/events.php?limit=5"
-
-Esperado:
-
-200 OK
-4.3. Ingesta compatible
-
-Con payload de prueba controlado:
-
-curl.exe -i -X POST "https://logs.singularthings.io/api/ingest.php" `
-  -H "Content-Type: application/json" `
-  -H "User-Agent: WalkerPisa-Bridge-Logs" `
-  -H "X-Log-Auth: <INGEST_SECRET>" `
-  --data-binary "@test-production-payload.json"
-
-Esperado en payload nuevo:
-
-"ok": true
-"duplicate": false
-"message": "Payload received and processed."
-
-Esperado si el payload ya existía:
-
-"ok": true
-"duplicate": true
-"message": "Payload already received."
-4.4. Ingesta legacy en raíz
-curl.exe -i -X POST "https://logs.singularthings.io/" `
-  -H "Content-Type: application/json" `
-  -H "User-Agent: WalkerPisa-Bridge-Logs" `
-  -H "X-Log-Auth: <INGEST_SECRET>" `
-  --data-binary "@test-production-payload.json"
-
-Debe responder igual que /api/ingest.php.
-
-5. Interpretación del healthcheck
-Estado sano
-{
-  "ok": true,
-  "database": "ok"
-}
-
-Además:
-
-checks.storage.raw.ok = true
-checks.storage.rejected.ok = true
-BD fallando
-
-Síntomas:
-
-HTTP 503
-"database": "error"
-checks.database.ok = false
-
-Acciones:
-
-Revisar credenciales en /private/.env.
-Comprobar en phpMyAdmin si la base existe.
-Comprobar que las tablas existen:
-devices
-log_ingests
-log_events
-No tocar bridges hasta confirmar que el endpoint no puede escribir.
-Cuando vuelva la BD, probar /api/health.php.
-Storage raw fallando
-
-Síntomas:
-
-HTTP 503
-checks.storage.raw.ok = false
-
-Acciones:
-
-Revisar que existe:
-
-/private/storage/raw
-Revisar permisos de escritura.
-Revisar que PHP puede crear archivos.
-No activar archivado mientras raw falle.
-Reprobar /api/health.php.
-Storage rejected fallando
-
-Síntomas:
-
-HTTP 503
-checks.storage.rejected.ok = false
-
-Acciones:
-
-Revisar que existe:
-
-/private/storage/rejected
-Revisar permisos de escritura.
-Corregir antes de considerar producción sana.
-Rate-limit storage fallando
-
-Síntomas:
-
-warnings contiene storage_rate_limit_not_ready
-
-Acciones:
-
-Revisar:
-
-/private/storage/rate-limit
-Revisar permisos.
-La ingesta no debería pararse por esto porque el rate limiter trabaja en modo fail-open.
-6. Reprocess de ingests
-
-El reprocess permite procesar ingests ya guardados.
-
-Endpoint:
-
-POST /api/admin/reprocess.php
-
-Debe estar desactivado por defecto:
-
-REPROCESS_ENDPOINT_ENABLED=false
-Activar temporalmente
-
-En /private/.env:
-
-REPROCESS_ENDPOINT_ENABLED=true
-
-Después de usarlo, volver a:
-
-REPROCESS_ENDPOINT_ENABLED=false
-Ejecutar batch
-curl.exe -i -X POST "https://logs.singularthings.io/api/admin/reprocess.php?limit=10" `
-  -H "X-Admin-Token: <ADMIN_TOKEN>"
-Reprocesar un ingest concreto
-curl.exe -i -X POST "https://logs.singularthings.io/api/admin/reprocess.php?id=406&force=1" `
-  -H "X-Admin-Token: <ADMIN_TOKEN>"
-Seguridad
-
-No dejar el endpoint activado permanentemente salvo decisión explícita.
-
-7. Archivado de raw NDJSON
-
-El archivado comprime ficheros antiguos de:
-
-/private/storage/raw/
-
-hacia:
-
-/private/storage/archive/raw/
-
-Ejemplo:
-
-raw/2026/05/07/bridge_120.ndjson
-archive/raw/2026/05/07/bridge_120.ndjson.gz
-
-Endpoint:
-
-POST /api/admin/archive_raw.php
-
-Debe estar desactivado por defecto:
-
-ARCHIVE_RAW_ENDPOINT_ENABLED=false
-Activar temporalmente
-
-En /private/.env:
-
-ARCHIVE_RAW_ENDPOINT_ENABLED=true
-
-Después de usarlo:
-
-ARCHIVE_RAW_ENDPOINT_ENABLED=false
-Dry-run remoto
-curl.exe -i -X POST "https://logs.singularthings.io/api/admin/archive_raw.php?limit=20&min_age_days=7" `
-  -H "X-Admin-Token: <ADMIN_TOKEN>"
-
-No modifica ficheros.
-
-Ejecución real
-curl.exe -i -X POST "https://logs.singularthings.io/api/admin/archive_raw.php?execute=1&delete_source=1&limit=20&min_age_days=7" `
-  -H "X-Admin-Token: <ADMIN_TOKEN>"
-
-Recomendación:
-
-Hacer primero dry-run.
-Revisar resultados.
-Ejecutar con límite pequeño.
-Repetir si todo está correcto.
-Desactivar endpoint al terminar.
-8. Rate limiting de ingesta
-
-El rate limiting protege:
-
-POST /
-POST /api/ingest.php
-
-## Configuración de runtime
-
-La configuración vive en `src/Config/runtime.php` (NO versionado, NO desplegado por FTP).
-
-Para crear/actualizar:
-1. Conéctate por FTP a la raíz del subdominio.
-2. Sube manualmente `src/Config/runtime.php` con los valores reales.
-3. El archivo lo ignora `.gitignore` y lo excluye el workflow de deploy.
-
-Variables obligatorias (validadas en Bootstrap::init):
-- APP_ENV, LOG_INGEST_SECRET, LOG_INGEST_USER_AGENT
-- DB_HOST, DB_DATABASE, DB_USERNAME, DB_PASSWORD
-
-Variables opcionales:
-- VIEWER_AUTH_ENABLED (default true), VIEWER_AUTH_USERNAME, VIEWER_AUTH_PASSWORD
-- REPROCESS_ENABLED (default false), ADMIN_REPROCESS_TOKEN
-- ARCHIVE_RAW_ENDPOINT_ENABLED (default false)
-- SERVICES_LOGS_IMPORT_ENABLED (default false), SERVICES_LOGS_STORAGE_PATH
-- INGEST_RATE_LIMIT_ENABLED (default true), INGEST_RATE_LIMIT_MAX (1000), INGEST_RATE_LIMIT_WINDOW_SECONDS (600)
-- STORAGE_BASE_PATH (default: <project_root>/storage)
-
-NB: NUNCA editar directamente desde phpMyAdmin ni un editor externo sin
-backup — runtime.php es la única barrera entre el dashboard y el dominio.
-
-9. Investigación de errores de parseo
-Ver eventos con error
-/events.php?parse_ok=0
-Ver detalle de un evento
-/event.php?id=<event_id>
-
-Revisar:
-
-parse_error
-message_text
-measurements
-context
-ingest
-bridge
-Ver ingest que produjo el evento
-
-Desde event.php, usar el enlace al ingest.
-
-O directamente:
-
-/ingest.php?id=<ingest_id>
-Ver todos los eventos del ingest
-/events.php?ingest_id=<ingest_id>
-10. Investigación por dispositivo
-Listado
-/devices.php
-Detalle
-/device.php?id=<device_id>
-Eventos de un dispositivo
-/events.php?device_id=<device_id>
-Eventos de un bridge
-/events.php?bridge_id=<bridge_device_id>
-11. Qué hacer si llegan logs pero no aparecen eventos
-Comprobar /api/health.php.
-Ver /ingests.php.
-Buscar ingests recientes.
-Abrir el detalle del ingest.
-Comprobar:
-status
-line_count
-parsed_ok_count
-parsed_error_count
-raw_path
-Si status está en received, usar reprocess.
-Si status está en error, revisar mensaje asociado o reprocesar con cuidado.
-Si hay parse errors, revisar /events.php?parse_ok=0.
-```
+Select-String -Path ".\src\Ingest\LogEventWriter.php" -Pattern "array_chunk","INSERT_CHUNK_SIZE","ON DUPLICATE KEY UPDATE"

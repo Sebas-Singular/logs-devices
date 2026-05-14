@@ -9,9 +9,9 @@ use PDO;
 
 final class LogEventWriter
 {
-    public function __construct(private readonly PDO $pdo)
-    {
-    }
+    private const INSERT_CHUNK_SIZE = 100;
+
+    public function __construct(private readonly PDO $pdo) {}
 
     public function insertEvents(array $events): int
     {
@@ -19,8 +19,60 @@ final class LogEventWriter
             return 0;
         }
 
-        $stmt = $this->pdo->prepare(
-            'INSERT INTO log_events (
+        $inserted = 0;
+
+        foreach (array_chunk($events, self::INSERT_CHUNK_SIZE) as $chunk) {
+            $rows = array_map(fn(array $event): array => $this->normalizeEvent($event), $chunk);
+            $inserted += $this->insertChunk($rows);
+        }
+
+        return $inserted;
+    }
+
+    private function insertChunk(array $rows): int
+    {
+        if ($rows === []) {
+            return 0;
+        }
+
+        $columns = [
+            'ingest_id',
+            'device_id',
+            'bridge_device_id',
+            'event_timestamp',
+            'received_at',
+            'severity',
+            'severity_origin',
+            'event_type',
+            'event_category',
+            'device_mac_raw',
+            'message_text',
+            'measurements',
+            'context',
+            'parse_ok',
+            'parse_error',
+            'quality_status',
+            'anomaly_flags',
+            'event_hash',
+            'created_at',
+        ];
+
+        $valuesSql = [];
+        $params = [];
+
+        foreach ($rows as $rowIndex => $row) {
+            $placeholders = [];
+
+            foreach ($columns as $column) {
+                $paramName = $column . '_' . $rowIndex;
+                $placeholders[] = ':' . $paramName;
+                $params[$paramName] = $row[$column];
+            }
+
+            $valuesSql[] = '(' . implode(', ', $placeholders) . ')';
+        }
+
+        $sql = 'INSERT INTO log_events (
                 ingest_id, device_id, bridge_device_id,
                 event_timestamp, received_at,
                 severity, severity_origin,
@@ -30,31 +82,14 @@ final class LogEventWriter
                 parse_ok, parse_error,
                 quality_status, anomaly_flags,
                 event_hash, created_at
-            ) VALUES (
-                :ingest_id, :device_id, :bridge_device_id,
-                :event_timestamp, :received_at,
-                :severity, :severity_origin,
-                :event_type, :event_category,
-                :device_mac_raw, :message_text,
-                :measurements, :context,
-                :parse_ok, :parse_error,
-                :quality_status, :anomaly_flags,
-                :event_hash, :created_at
-            )
-            ON DUPLICATE KEY UPDATE id = id'
-        );
+            ) VALUES '
+            . implode(', ', $valuesSql)
+            . ' ON DUPLICATE KEY UPDATE id = id';
 
-        $inserted = 0;
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
 
-        foreach ($events as $event) {
-            $stmt->execute($this->normalizeEvent($event));
-
-            if ($stmt->rowCount() === 1) {
-                $inserted++;
-            }
-        }
-
-        return $inserted;
+        return $stmt->rowCount();
     }
 
     private function normalizeEvent(array $event): array

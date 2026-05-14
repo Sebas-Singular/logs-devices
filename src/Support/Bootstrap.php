@@ -27,6 +27,9 @@ final class Bootstrap
 
     public static function init(): void
     {
+        date_default_timezone_set('UTC');
+        ini_set('date.timezone', 'UTC');
+
         if (self::$initialized) {
             return;
         }
