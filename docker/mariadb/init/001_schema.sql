@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS log_events (
   device_id BIGINT UNSIGNED NULL,
   bridge_device_id BIGINT UNSIGNED NULL,
 
-  event_timestamp DATETIME NULL,
+  event_timestamp DATETIME NOT NULL,
   received_at DATETIME NOT NULL,
 
   severity VARCHAR(20) NOT NULL DEFAULT 'unknown',

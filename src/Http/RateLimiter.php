@@ -4,8 +4,15 @@ declare(strict_types=1);
 
 namespace App\Http;
 
+use DirectoryIterator;
+use Throwable;
+
 final class RateLimiter
 {
+    private const JANITOR_PROBABILITY_DIVISOR = 100;
+    private const JANITOR_MAX_DELETIONS_PER_RUN = 50;
+    private const JANITOR_MIN_STALE_SECONDS = 3600;
+
     /**
      * @return array{
      *     allowed: bool,
@@ -39,6 +46,8 @@ final class RateLimiter
             return self::failOpen($maxAttempts, $windowSeconds, $now);
         }
 
+        self::runJanitorMaybe($storageDir, $now, $windowSeconds);
+
         $filePath = rtrim($storageDir, '/\\') . '/' . hash('sha256', $key) . '.json';
 
         $handle = @fopen($filePath, 'c+');
@@ -47,11 +56,16 @@ final class RateLimiter
             return self::failOpen($maxAttempts, $windowSeconds, $now);
         }
 
+        $locked = false;
+
         try {
             if (!flock($handle, LOCK_EX)) {
-                fclose($handle);
                 return self::failOpen($maxAttempts, $windowSeconds, $now);
             }
+
+            $locked = true;
+
+            rewind($handle);
 
             $raw = stream_get_contents($handle);
             $state = is_string($raw) && trim($raw) !== ''
@@ -78,9 +92,6 @@ final class RateLimiter
             if ($count >= $maxAttempts) {
                 self::writeState($handle, $windowStart, $count);
 
-                flock($handle, LOCK_UN);
-                fclose($handle);
-
                 return [
                     'allowed' => false,
                     'limit' => $maxAttempts,
@@ -92,10 +103,8 @@ final class RateLimiter
             }
 
             $count++;
-            self::writeState($handle, $windowStart, $count);
 
-            flock($handle, LOCK_UN);
-            fclose($handle);
+            self::writeState($handle, $windowStart, $count);
 
             return [
                 'allowed' => true,
@@ -105,20 +114,88 @@ final class RateLimiter
                 'reset_at' => $resetAt,
                 'storage_available' => true,
             ];
-        } catch (\Throwable) {
-            if (is_resource($handle)) {
+        } catch (Throwable) {
+            return self::failOpen($maxAttempts, $windowSeconds, $now);
+        } finally {
+            if ($locked) {
                 @flock($handle, LOCK_UN);
-                @fclose($handle);
             }
 
-            return self::failOpen($maxAttempts, $windowSeconds, $now);
+            if (is_resource($handle)) {
+                @fclose($handle);
+            }
+        }
+    }
+
+    public static function prune(
+        string $storageDir,
+        int $olderThanSeconds,
+        ?int $now = null,
+        int $maxDeletes = self::JANITOR_MAX_DELETIONS_PER_RUN
+    ): int {
+        if ($olderThanSeconds <= 0 || $maxDeletes <= 0 || !is_dir($storageDir)) {
+            return 0;
+        }
+
+        $now ??= time();
+        $cutoff = $now - $olderThanSeconds;
+        $deleted = 0;
+
+        try {
+            foreach (new DirectoryIterator($storageDir) as $file) {
+                if ($file->isDot() || !$file->isFile()) {
+                    continue;
+                }
+
+                if (strtolower($file->getExtension()) !== 'json') {
+                    continue;
+                }
+
+                if ($file->getMTime() > $cutoff) {
+                    continue;
+                }
+
+                if (@unlink($file->getPathname())) {
+                    $deleted++;
+                }
+
+                if ($deleted >= $maxDeletes) {
+                    break;
+                }
+            }
+        } catch (Throwable) {
+            return $deleted;
+        }
+
+        return $deleted;
+    }
+
+    private static function runJanitorMaybe(string $storageDir, int $now, int $windowSeconds): void
+    {
+        try {
+            if (random_int(1, self::JANITOR_PROBABILITY_DIVISOR) !== 1) {
+                return;
+            }
+
+            $olderThanSeconds = max(
+                self::JANITOR_MIN_STALE_SECONDS,
+                $windowSeconds * 2
+            );
+
+            self::prune(
+                storageDir: $storageDir,
+                olderThanSeconds: $olderThanSeconds,
+                now: $now,
+                maxDeletes: self::JANITOR_MAX_DELETIONS_PER_RUN
+            );
+        } catch (Throwable) {
         }
     }
 
     private static function writeState(mixed $handle, int $windowStart, int $count): void
     {
-        ftruncate($handle, 0);
         rewind($handle);
+        ftruncate($handle, 0);
 
         fwrite($handle, json_encode([
             'window_start' => $windowStart,

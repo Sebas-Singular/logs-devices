@@ -97,7 +97,7 @@ final class ViewerQueries
                ON d.id = le.device_id
              LEFT JOIN devices bridge
                ON bridge.id = le.bridge_device_id
-             ORDER BY COALESCE(le.event_timestamp, le.received_at) DESC, le.id DESC
+             ORDER BY le.event_timestamp DESC, le.id DESC
              LIMIT :limit'
         );
 
@@ -127,7 +127,7 @@ final class ViewerQueries
                 SUM(CASE WHEN le.severity = "critical" THEN 1 ELSE 0 END) AS critical_count,
                 SUM(CASE WHEN le.severity = "error" THEN 1 ELSE 0 END) AS error_count,
                 SUM(CASE WHEN le.severity = "warn" THEN 1 ELSE 0 END) AS warn_count,
-                MAX(COALESCE(le.event_timestamp, le.received_at)) AS last_event_at
+                MAX(le.event_timestamp) AS last_event_at
             FROM devices d
             LEFT JOIN devices parent
             ON parent.id = d.parent_device_id
@@ -310,7 +310,7 @@ final class ViewerQueries
             LEFT JOIN devices bridge
             ON bridge.id = le.bridge_device_id
             WHERE {$condition}
-            ORDER BY COALESCE(le.event_timestamp, le.received_at) DESC, le.id DESC
+            ORDER BY le.event_timestamp DESC, le.id DESC
             LIMIT :limit"
         );
 
@@ -365,12 +365,12 @@ final class ViewerQueries
         }
 
         if (!empty($filters['from'])) {
-            $where[] = 'COALESCE(le.event_timestamp, le.received_at) >= :from';
+            $where[] = 'le.event_timestamp >= :from';
             $params['from'] = (string) $filters['from'];
         }
 
         if (!empty($filters['to'])) {
-            $where[] = 'COALESCE(le.event_timestamp, le.received_at) <= :to';
+            $where[] = 'le.event_timestamp <= :to';
             $params['to'] = (string) $filters['to'];
         }
 
@@ -436,7 +436,7 @@ final class ViewerQueries
          LEFT JOIN devices bridge
            ON bridge.id = le.bridge_device_id
          {$whereSql}
-         ORDER BY COALESCE(le.event_timestamp, le.received_at) DESC, le.id DESC
+         ORDER BY le.event_timestamp DESC, le.id DESC
          LIMIT :limit OFFSET :offset"
         );
 
@@ -476,12 +476,12 @@ final class ViewerQueries
         }
 
         if (!empty($filters['from'])) {
-            $where[] = 'COALESCE(le.event_timestamp, le.received_at) >= :from';
+            $where[] = 'le.event_timestamp >= :from';
             $params['from'] = (string) $filters['from'];
         }
 
         if (!empty($filters['to'])) {
-            $where[] = 'COALESCE(le.event_timestamp, le.received_at) <= :to';
+            $where[] = 'le.event_timestamp <= :to';
             $params['to'] = (string) $filters['to'];
         }
 
