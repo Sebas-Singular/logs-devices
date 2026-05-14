@@ -8,6 +8,17 @@ RewriteCond %{HTTP:Authorization} .
 RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
 # -----------------------------------------------------------------------------
+# Bloqueo de acceso directo a /public.
+#
+# Los rewrites internos sí pueden resolver a public/*.php, pero una petición
+# externa como /public/index.php o /public/api/health.php queda prohibida.
+# THE_REQUEST contiene la URL original pedida por el cliente, no el destino
+# interno del rewrite.
+# -----------------------------------------------------------------------------
+RewriteCond %{THE_REQUEST} \s/+public(?:/|\s) [NC]
+RewriteRule ^public(?:/|$) - [F,L,NC]
+
+# -----------------------------------------------------------------------------
 # Bloqueo de directorios no públicos.
 # Aunque el hosting sirva este subdirectorio como raíz del subdominio, estas
 # carpetas nunca deben poder descargarse por HTTP.
@@ -15,11 +26,25 @@ RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 RewriteRule ^services/logs/storage(?:/|$) - [F,L,NC]
 RewriteRule ^(?:src|vendor|storage|scripts|docs|tests|private|logs-notifications)(?:/|$) - [F,L,NC]
 
-# Bloqueo de dotfiles: .git, .env, .htaccess, .phpunit.result.cache, etc.
+# Bloqueo de dotfiles: .git, .env, .htaccess, .phpunit.result.cache,
+# .ftp-deploy-sync-state.json, etc.
 RewriteRule (^|/)\. - [F,L]
 
-# Bloqueo de ficheros sensibles habituales en raíz.
-RewriteRule ^(?:composer\.(?:json|lock)|phpunit\.xml(?:\.dist)?|docker-compose\.ya?ml|README\.md)$ - [F,L,NC]
+# Bloqueo de ficheros sensibles o huérfanos en raíz.
+RewriteRule ^(?:composer\.(?:json|lock)|phpunit\.xml(?:\.dist)?|docker-compose\.ya?ml|README\.md|home\.html)$ - [F,L,NC]
+
+# -----------------------------------------------------------------------------
+# Whitelist defensiva.
+#
+# Permitimos:
+# - Rutas públicas externas.
+# - Endpoints API externos.
+# - Endpoint legacy de bridges.
+# - Destinos internos public/... necesarios para que funcionen los rewrites.
+#
+# Todo lo demás devuelve 403.
+# -----------------------------------------------------------------------------
+RewriteRule !^(?:$|index\.php|devices\.php|device\.php|events\.php|event\.php|ingests\.php|ingest\.php|api/(?:ingest|health)\.php|api/admin/(?:reprocess|archive_raw|import_services_logs)\.php|services/logs/index\.php|public/(?:index|devices|device|events|event|ingests|ingest)\.php|public/api/(?:ingest|health)\.php|public/api/admin/(?:reprocess|archive_raw|import_services_logs)\.php)$ - [F,L,NC]
 
 # -----------------------------------------------------------------------------
 # Rutas públicas del visor.
@@ -45,4 +70,4 @@ RewriteRule ^api/admin/reprocess\.php$ public/api/admin/reprocess.php [L,QSA]
 RewriteRule ^api/admin/archive_raw\.php$ public/api/admin/archive_raw.php [L,QSA]
 RewriteRule ^api/admin/import_services_logs\.php$ public/api/admin/import_services_logs.php [L,QSA]
 
-# Cualquier otra ruta queda como 404 controlado por Apache.
+# Cualquier otra ruta queda bloqueada por la whitelist defensiva anterior.

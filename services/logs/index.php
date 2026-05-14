@@ -110,26 +110,101 @@ function load_week_data($storage_file, $week_key)
 
 function store_upload($storage_file, $week_key, $upload)
 {
-    $data = load_week_data($storage_file, $week_key);
+    $handle = fopen($storage_file, 'c+');
 
-    $data["week"] = $week_key;
-    $data["uploads"][] = $upload;
-    $data["updated_at"] = gmdate("c");
-    $data["upload_count"] = count($data["uploads"]);
-
-    $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-
-    if ($json === false) {
-        send_forbidden("JSON encode error.");
+    if ($handle === false) {
+        send_forbidden("Open fail.");
         exit;
     }
 
-    if (file_put_contents($storage_file, $json, LOCK_EX) === false) {
-        send_forbidden("Write error.");
-        exit;
-    }
+    $locked = false;
+    $error = null;
+    $result = null;
 
-    return $data;
+    try {
+        if (!flock($handle, LOCK_EX)) {
+            $error = "Lock fail.";
+            return null;
+        }
+
+        $locked = true;
+
+        rewind($handle);
+        $raw = stream_get_contents($handle);
+
+        if ($raw === false) {
+            $raw = "";
+        }
+
+        if (trim($raw) === "") {
+            $data = array(
+                "week" => $week_key,
+                "updated_at" => gmdate("c"),
+                "upload_count" => 0,
+                "uploads" => array(),
+            );
+        } else {
+            $data = json_decode($raw, true);
+
+            if (!is_array($data) || !isset($data["uploads"]) || !is_array($data["uploads"])) {
+                $backup_file = $storage_file . ".corrupt." . gmdate("Ymd_His") . ".bak";
+                file_put_contents($backup_file, $raw, LOCK_EX);
+
+                $data = array(
+                    "week" => $week_key,
+                    "updated_at" => gmdate("c"),
+                    "upload_count" => 0,
+                    "uploads" => array(),
+                    "recovered_from_corrupt_backup" => basename($backup_file),
+                );
+            }
+        }
+
+        $data["week"] = $week_key;
+        $data["uploads"][] = $upload;
+        $data["updated_at"] = gmdate("c");
+        $data["upload_count"] = count($data["uploads"]);
+
+        $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        if ($json === false) {
+            $error = "JSON encode error.";
+            return null;
+        }
+
+        rewind($handle);
+
+        if (!ftruncate($handle, 0)) {
+            $error = "Truncate fail.";
+            return null;
+        }
+
+        $bytes = fwrite($handle, $json);
+
+        if ($bytes === false || $bytes < strlen($json)) {
+            $error = "Write error.";
+            return null;
+        }
+
+        if (!fflush($handle)) {
+            $error = "Flush fail.";
+            return null;
+        }
+
+        $result = $data;
+        return $result;
+    } finally {
+        if ($locked) {
+            flock($handle, LOCK_UN);
+        }
+
+        fclose($handle);
+
+        if ($error !== null) {
+            send_forbidden($error);
+            exit;
+        }
+    }
 }
 
 function extract_http_status($headers)
@@ -393,6 +468,7 @@ $forward_result = null;
 if ($is_logs_message) {
     $logs_data = store_upload($logs_file, $week_key, $upload);
     $stored_in[] = basename($logs_file);
+
     if ($forward_ingest_enabled) {
         $forward_result = forward_bridge_logs_to_ingest(
             $forward_ingest_endpoint,
