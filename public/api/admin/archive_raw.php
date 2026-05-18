@@ -6,7 +6,7 @@ use App\Http\SecurityHeaders;
 use App\Storage\Paths;
 use App\Storage\RawArchiveManager;
 use App\Support\Bootstrap;
-use App\Support\Env
+use App\Support\Env;
 
 require_once __DIR__ . '/../../../vendor/autoload.php';
 
@@ -104,7 +104,7 @@ function archiveEndpointEnabled(): bool
     $raw = Env::get('ARCHIVE_RAW_ENDPOINT_ENABLED');
 
     if ($raw === null || trim((string) $raw) === '') {
-    return false;
+        return false;
     }
 
     return in_array(strtolower(trim((string) $raw)), ['1', 'true', 'yes', 'on'], true);
