@@ -1,0 +1,303 @@
+id# Bridge Structured Log Schema
+
+Propuesta concreta para escalar logs entre proyectos sin depender de `logText` como contrato principal.
+
+## Objetivo
+
+Mantener dos capas en cada upload:
+
+- `raw`: bloque de texto original para trazabilidad y debugging
+- `events`: eventos normalizados para backend, alertas, búsqueda y analítica
+
+## Estado actual en firmware
+
+El uploader del bridge ya envía:
+
+- `raw.logText`
+- `events[]`
+- `eventCount`
+- `vehicleEvents[]` y `vehicleEventCount` como compatibilidad con el formato anterior
+
+Categorías estructuradas implementadas ahora:
+
+- `telemetry`
+- `speed`
+- `https`
+- `vehicle`
+- `errors`
+
+## Envelope recomendado
+
+```json
+{
+  "message": "bridge_logs",
+  "schemaVersion": 1,
+  "source": {
+    "project": "walkerpisa",
+    "product": "bridge",
+    "deviceType": "bridge",
+    "deviceId": 12,
+    "deviceName": "WalkerPisa Bridge",
+    "firmwareVersion": "0.11.1",
+    "serialNumber": "B81F-33EE-9B51-954B"
+  },
+  "upload": {
+    "sentAt": "2026-05-18 10:15:00",
+    "fromOffset": 422225,
+    "toOffset": 438501,
+    "rotated": false,
+    "bytes": 16276
+  },
+  "eventCount": 4,
+  "events": [],
+  "raw": {
+    "format": "plain-text",
+    "logText": "..."
+  }
+}
+```
+
+## Contrato común de `events[]`
+
+Cada evento usa esta base:
+
+```json
+{
+  "ts": "2026-05-18 09:33:24",
+  "eventTs": "2026-05-18 09:33:23.949",
+  "level": "info",
+  "code": "VEHICLE",
+  "category": "vehicle",
+  "type": "vehicle_detected",
+  "message": "Vehicle detected",
+  "deviceMac": "34:85:18:46:e3:70",
+  "nodeId": 6,
+  "nodeName": "Baliza 06 - Las Rozas",
+  "metrics": {},
+  "tags": {},
+  "raw": "[2026-05-18 09:33:24] [VEHICLE] INFO: [34:85:18:46:e3:70] VEHICLE_DETECTED -> ..."
+}
+```
+
+## Campos base
+
+- `ts`: timestamp del registro persistido por el bridge
+- `eventTs`: timestamp del evento de negocio si existe dentro del payload
+- `level`: `info`, `warn`, `error`
+- `code`: código funcional del bridge (`TELEMETRY`, `SPEED`, `HTTPS`, `VEHICLE`, ...)
+- `category`: familia estable para backend
+- `type`: tipo de evento estable
+- `message`: texto corto humano
+- `deviceMac`: MAC de la baliza si aplica
+- `nodeId`: id de baliza si aplica
+- `nodeName`: nombre de baliza si aplica
+- `metrics`: números y medidas
+- `tags`: metadatos string o estados
+- `raw`: línea original persistida
+
+## Categorías implementadas
+
+### `telemetry`
+
+```json
+{
+  "category": "telemetry",
+  "type": "telemetry_snapshot",
+  "metrics": {
+    "temperatureC": 21.4,
+    "humidityPct": 45.8,
+    "pressureHpa": 1013.2,
+    "airQuality": 82.0,
+    "iaqAccuracy": 3,
+    "stabilizationStatus": 1,
+    "runInStatus": 0,
+    "altitudeM": 612,
+    "lidarDistanceMm": 1822,
+    "socPct": 88,
+    "parentRssi": -64,
+    "lane": 1,
+    "locationId": 4,
+    "positionMm": 1200,
+    "referenceMm": 1450,
+    "servoXDeg": 0.0,
+    "servoYDeg": 0.0
+  },
+  "tags": {
+    "iaqState": "READY",
+    "chargingState": "CHARGING",
+    "powerSource": "AC"
+  }
+}
+```
+
+Uso:
+
+- series temporales
+- salud del nodo
+- depuración de instalación y calibración
+
+### `speed`
+
+```json
+{
+  "category": "speed",
+  "type": "speed_calculated",
+  "metrics": {
+    "speedKmh": 34.8,
+    "lane": 1,
+    "locationId": 4,
+    "distanceMm": 229,
+    "positionM": 1.20
+  }
+}
+```
+
+Uso:
+
+- analítica de tráfico
+- contraste con notificaciones emitidas
+
+### `https`
+
+```json
+{
+  "category": "https",
+  "type": "http_result",
+  "level": "error",
+  "metrics": {
+    "status": 500,
+    "ok": 0
+  },
+  "tags": {
+    "protocol": "HTTPS",
+    "notificationType": "ping",
+    "response": "{\"error\":\"...\"}"
+  }
+}
+```
+
+Uso:
+
+- auditoría de entregas HTTP
+- análisis de errores de integración
+
+### `vehicle`
+
+```json
+{
+  "category": "vehicle",
+  "type": "vehicle_detected",
+  "eventTs": "2026-05-18 09:33:23.949",
+  "metrics": {
+    "distanceMm": 229,
+    "previousSpeedKmh": 28.1,
+    "finalSpeedKmh": 31.4,
+    "accelerationMps2": -0.6
+  },
+  "tags": {
+    "mode": "speed",
+    "dynamicState": "BRAKING",
+    "quality": "HIGH"
+  }
+}
+```
+
+Tipos actuales:
+
+- `vehicle_detected`
+- `vehicle_exit`
+
+Uso:
+
+- trazabilidad de paso por baliza
+- reconstrucción de trayectorias
+- revisión del estimador robusto
+
+### `errors`
+
+```json
+{
+  "category": "errors",
+  "type": "bridge_error",
+  "level": "error",
+  "message": "HTTPS POST result type=ping status=500 ok=0 response=..."
+}
+```
+
+Uso:
+
+- alertas
+- recuento por firmware
+- clasificación por `code`
+
+## Decisiones de diseño
+
+1. `raw.logText` sigue existiendo
+   - evita pérdida de detalle
+   - permite reprocesado futuro
+
+2. `events[]` es el contrato principal
+   - backend no debería parsear `logText` salvo fallback
+
+3. `category` y `type` deben ser estables
+   - cambiar textos humanos no debe romper integraciones
+
+4. `metrics` agrupa números
+   - facilita indexación y agregación
+
+5. `tags` agrupa estados textuales
+   - evita proliferar campos top-level
+
+## Guía para otros proyectos
+
+Si otro proyecto usa el mismo uploader o el mismo backend:
+
+1. Mantener el mismo envelope:
+   - `schemaVersion`
+   - `source`
+   - `upload`
+   - `events`
+   - `raw`
+
+2. Reutilizar categorías si encajan:
+   - `telemetry`
+   - `speed`
+   - `https`
+   - `vehicle`
+   - `errors`
+
+3. Añadir nuevas categorías solo si son de dominio:
+   - `ota`
+   - `mesh`
+   - `config`
+   - `sensor`
+
+4. No usar `message` como clave semántica
+   - el backend debe usar `category` + `type`
+
+5. Mantener compatibilidad hacia atrás
+   - aceptar campos extra en backend
+   - versionar cambios con `schemaVersion`
+
+## Recomendación de backend
+
+Para escalar bien:
+
+- guardar el payload bruto completo
+- indexar `source.*`, `upload.*`, `events[].category`, `events[].type`, `events[].level`
+- explotar `metrics` en columnas o en un índice analítico
+- tratar `raw.logText` solo como respaldo
+
+## Fases siguientes recomendadas
+
+1. Backend:
+   - ingerir `events[]`
+   - dejar de depender de regex sobre `logText`
+
+2. Firmware:
+   - persistir más errores relevantes a archivo con `bridge_write_log_to_file`
+   - añadir categorías futuras como `ota` y `ws`
+
+3. Observabilidad:
+   - dashboards por `category/type`
+   - alertas sobre `errors` y `https`
