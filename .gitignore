@@ -48,3 +48,20 @@ src/Config/runtime.php
 
 # Logs from external notification/backend services
 logs-notifications/
+
+# Datos runtime del legacy y debug logs
+services/logs/storage/
+services/logs/legacy_access_*.ndjson
+services/logs/*.bak
+
+# Datos runtime de la app
+storage/
+
+# Secretos
+src/Config/runtime.php
+src/Config/runtime.local.php
+src/Config/runtime.local.php.*
+private/
+
+# Estado FTP
+.ftp-deploy-sync-state.json

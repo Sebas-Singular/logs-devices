@@ -123,7 +123,7 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           port: 21
           protocol: ftp
-          #dry-run: true
+          dry-run: true
           log-level: verbose
           local-dir: ./
           server-dir: ${{ secrets.FTP_TARGET_DIR }}
@@ -148,6 +148,11 @@ jobs:
 
             storage/**
 
+            services/logs/storage/**
+            services/logs/legacy_access_*.ndjson
+            services/logs/*.bak
+            services/logs/storage/*.bak
+
             docs/**
             scripts/**
             tests/**
@@ -159,7 +164,6 @@ jobs:
             Dockerfile
 
             index.php
-
             README.md
 
             composer.json
@@ -167,3 +171,5 @@ jobs:
             phpunit.xml
             phpunit.xml.dist
             .phpunit.result.cache
+
+            .ftp-deploy-sync-state.json
