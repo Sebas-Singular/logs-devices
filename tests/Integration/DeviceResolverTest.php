@@ -174,17 +174,20 @@ final class DeviceResolverTest extends TestCase
     // Helpers privados
     // =========================================================================
 
-    private function fetchDevice(int $id): ?array
+    private function fetchDevice(int $id): array
     {
         $stmt = $this->pdo->prepare(
             'SELECT id, device_kind, mac_address, external_id, name,
-                    name_origin, parent_device_id, first_seen_at, last_seen_at
-               FROM devices
-              WHERE id = :id'
+                name_origin, parent_device_id, first_seen_at, last_seen_at,
+                metadata
+           FROM devices
+          WHERE id = :id
+          LIMIT 1'
         );
+
         $stmt->execute(['id' => $id]);
-        $row = $stmt->fetch();
-        return $row !== false ? $row : null;
+
+        return $stmt->fetch();
     }
 
     private function countDevices(string $kind, string $externalId): int
