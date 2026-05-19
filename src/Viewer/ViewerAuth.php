@@ -14,34 +14,30 @@ final class ViewerAuth
             return;
         }
 
+        ViewerSession::start();
+
+        if (ViewerSession::isAuthenticated()) {
+            return;
+        }
+
+        $currentUrl = (string) ($_SERVER['REQUEST_URI'] ?? '/');
+        ViewerSession::redirectToLogin($currentUrl);
+    }
+
+    public static function checkCredentials(string $username, string $password): bool
+    {
         $expectedUsername = (string) Env::get('VIEWER_AUTH_USERNAME', '');
         $expectedPassword = (string) Env::get('VIEWER_AUTH_PASSWORD', '');
 
         if ($expectedUsername === '' || $expectedPassword === '') {
-            http_response_code(500);
-            header('Content-Type: text/plain; charset=utf-8');
-            echo 'Viewer authentication is enabled but credentials are not configured.';
-            exit;
+            return false;
         }
 
-        $providedUsername = (string) ($_SERVER['PHP_AUTH_USER'] ?? '');
-        $providedPassword = (string) ($_SERVER['PHP_AUTH_PW'] ?? '');
-
-        if (
-            hash_equals($expectedUsername, $providedUsername)
-            && hash_equals($expectedPassword, $providedPassword)
-        ) {
-            return;
-        }
-
-        header('WWW-Authenticate: Basic realm="logs-devices viewer"');
-        http_response_code(401);
-        header('Content-Type: text/plain; charset=utf-8');
-        echo 'Authentication required.';
-        exit;
+        return hash_equals($expectedUsername, $username)
+            && hash_equals($expectedPassword, $password);
     }
 
-    private static function isEnabled(): bool
+    public static function isEnabled(): bool
     {
         $value = strtolower(trim((string) Env::get('VIEWER_AUTH_ENABLED', 'true')));
 

@@ -131,6 +131,11 @@ try {
                     Ingests
                 </a>
             </nav>
+            <a href="/logout.php"
+                class="rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                title="Cerrar sesión">
+                Salir
+            </a>
         </div>
     </header>
 

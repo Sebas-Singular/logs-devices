@@ -115,6 +115,11 @@ try {
                 <a href="/events.php" class="rounded-lg px-3 py-2 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900">Eventos</a>
                 <a href="/ingests.php" class="rounded-lg bg-slate-900 px-3 py-2 font-medium text-white">Ingests</a>
             </nav>
+            <a href="/logout.php"
+                class="rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                title="Cerrar sesión">
+                Salir
+            </a>
         </div>
     </header>
 

@@ -31,6 +31,8 @@ RewriteRule ^events\.php$ public/events.php [L,QSA]
 RewriteRule ^event\.php$ public/event.php [L,QSA]
 RewriteRule ^ingests\.php$ public/ingests.php [L,QSA]
 RewriteRule ^ingest\.php$ public/ingest.php [L,QSA]
+RewriteRule ^login\.php$ public/login.php [L,QSA]
+RewriteRule ^logout\.php$ public/logout.php [L,QSA]
 
 # Endpoints API.
 RewriteRule ^api/ingest\.php$ public/api/ingest.php [L,QSA]

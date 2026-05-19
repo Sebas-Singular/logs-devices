@@ -97,6 +97,11 @@ $severityOrder = ['critical', 'error', 'warn', 'info', 'unknown'];
                         Ingests
                     </a>
                 </nav>
+                <a href="/logout.php"
+                    class="rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                    title="Cerrar sesión">
+                    Salir
+                </a>
 
                 <div class="text-right text-sm text-slate-500">
                     <div>

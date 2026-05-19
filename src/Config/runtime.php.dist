@@ -47,5 +47,6 @@ return [
     'INGEST_RATE_LIMIT_MAX'             => '1000',
     'INGEST_RATE_LIMIT_WINDOW_SECONDS'  => '600',
 
-    // ===== Storage =====
+    // Tiempo en segundos de inactividad antes de cerrar la sesión del visor.
+    'VIEWER_SESSION_LIFETIME' => '1800',
 ];
