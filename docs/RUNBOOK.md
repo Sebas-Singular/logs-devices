@@ -1,367 +1,343 @@
-# logs-devices — Runbook operativo
+# RUNBOOK — logs-devices
 
-Aplicación interna de Singular Things para recibir, almacenar, parsear y visualizar logs de bridges/balizas IoT del proyecto WalkerPisa.
+Guía operativa para monitorización, diagnóstico y mantenimiento del sistema
+en producción (CDMon Senior hosting).
 
-## 1. Producción
+Accesos disponibles:
 
-URL principal:
-
-````text
-https://logs.singularthings.io/
-
-Restricciones reales del hosting:
-
-Proveedor: CDmon Senior
-Acceso: FTP + phpMyAdmin
-Sin SSH operativo confirmado
-Sin Docker en producción
-Sin cron
-Sin workers persistentes
-Sin acceso server-level
-PHP 8.3
-MariaDB
-
-El proyecto vive dentro de la raíz del subdominio. No se asume acceso a una carpeta private externa.
-
-2. Configuración
-
-La configuración real de producción se lee desde:
-
-src/Config/runtime.php
-
-Ese fichero:
-
-No se versiona
-No se despliega por GitHub Actions
-Debe subirse/editarse manualmente por FTP cuando haga falta
-
-Template versionado:
-
-src/Config/runtime.php.dist
-
-Variables principales:
-
-APP_ENV=production
-APP_URL=https://logs.singularthings.io
-
-DB_HOST=...
-DB_PORT=...
-DB_DATABASE=...
-DB_USERNAME=...
-DB_PASSWORD=...
-
-LOG_INGEST_SECRET=...
-LOG_INGEST_USER_AGENT=WalkerPisa-Bridge-Logs
-
-VIEWER_AUTH_ENABLED=true
-VIEWER_AUTH_USERNAME=...
-VIEWER_AUTH_PASSWORD=...
-
-ADMIN_REPROCESS_TOKEN=...
-
-REPROCESS_ENABLED=false
-ARCHIVE_RAW_ENDPOINT_ENABLED=false
-SERVICES_LOGS_IMPORT_ENABLED=false
-
-INGEST_RATE_LIMIT_ENABLED=true
-INGEST_RATE_LIMIT_MAX=1000
-INGEST_RATE_LIMIT_WINDOW_SECONDS=600
-
-LEGACY_FORWARD_ENABLED=true
-
-No usar nombres antiguos como:
-
-INGEST_SECRET
-ADMIN_TOKEN
-VIEWER_BASIC_USER
-VIEWER_BASIC_PASSWORD
-3. Endpoints
-
-Viewer protegido por HTTP Basic Auth:
-
-GET /
-GET /index.php
-GET /devices.php
-GET /device.php?id=<id>
-GET /events.php
-GET /event.php?id=<id>
-GET /ingests.php
-GET /ingest.php?id=<id>
-
-API pública reducida:
-
-GET /api/health.php
-
-API full protegida por token admin:
-
-GET /api/health.php?mode=full
-Header: X-Admin-Token: <ADMIN_REPROCESS_TOKEN>
-
-Ingesta nueva:
-
-POST /api/ingest.php
-
-Ingesta legacy usada por bridges desplegados:
-
-POST /services/logs/index.php
-
-Contrato legacy externo que no debe romperse sin coordinar firmware:
-
-User-Agent: WalkerPisa-Bridge-Logs
-X-Log-Auth: <LOG_INGEST_SECRET>
-Content-Type: application/json
-4. Seguridad HTTP
-
-La raíz tiene .htaccess con:
-
-Options -Indexes
-Bloqueo de src/
-Bloqueo de vendor/
-Bloqueo de storage/
-Bloqueo de services/logs/storage/
-Bloqueo de scripts/
-Bloqueo de docs/
-Bloqueo de tests/
-Bloqueo de private/
-Bloqueo de dotfiles
-Whitelist defensiva de rutas públicas
-Bloqueo de acceso directo a /public
-
-Rutas que deben estar bloqueadas:
-
-/src/Config/runtime.php
-/vendor/autoload.php
-/storage/raw/
-/services/logs/storage/
-/composer.json
-/.env
-/.git/config
-/private/.env
-/scripts/reprocess_ingests.php
-/docs/RUNBOOK.md
-/tests/bootstrap.php
-/home.html
-/random.php
-/api/random.php
-/public/index.php
-/public/api/health.php
-5. Deploy
-
-Deploy actual:
-
-GitHub Actions → FTP
-
-El intento de FTPS explícito falló contra el host actual:
-
-AUTH TLS
-500 AUTH not understood
-
-Puerto observado:
-
-21 abierto
-990 cerrado
-22 abierto pendiente de confirmar
-
-Hasta que CDmon confirme SFTP/FTPS usable, el deploy sigue por FTP plano. Si se consigue SFTP/FTPS, cambiar el workflow y rotar credenciales.
-
-El deploy excluye:
-
-src/Config/runtime.php
-storage/**
-services/logs/storage/**
-private/**
-docs/**
-scripts/**
-tests/**
-logs-notifications/**
-composer.json
-composer.lock
-index.php raíz
-6. CI
-
-Hay workflow de tests:
-
-.github/workflows/test.yml
-
-Corre en:
-
-push
-pull_request
-
-El deploy manual también ejecuta PHPUnit antes de subir por FTP. Si PHPUnit falla, no hay deploy.
-
-7. Smoke tests Windows PowerShell
-
-Definir variables:
-
-$BASE = "https://logs.singularthings.io"
-$VIEWER_USER = "USUARIO"
-$VIEWER_PASSWORD = "PASSWORD"
-$AUTH = "$($VIEWER_USER):$($VIEWER_PASSWORD)"
-
-Viewer:
-
-curl.exe -sS -o NUL -w "%{http_code}`n" -u "$AUTH" "$BASE/"
-curl.exe -sS -o NUL -w "%{http_code}`n" -u "$AUTH" "$BASE/devices.php"
-curl.exe -sS -o NUL -w "%{http_code}`n" -u "$AUTH" "$BASE/events.php"
-curl.exe -sS -o NUL -w "%{http_code}`n" -u "$AUTH" "$BASE/ingests.php"
-
-Esperado:
-
-200
-200
-200
-200
-
-Health público:
-
-curl.exe -sS "$BASE/api/health.php"
-
-Esperado:
-
-{
-  "ok": true,
-  "app": "logs-devices",
-  "mode": "public",
-  "env": "production",
-  "database": "ok",
-  "storage": "ok"
-}
-
-Health full:
-
-$ADMIN_REPROCESS_TOKEN = "TOKEN_REAL"
-
-curl.exe -sS `
-  -H "X-Admin-Token: $ADMIN_REPROCESS_TOKEN" `
-  "$BASE/api/health.php?mode=full"
-8. Smoke test de ingestión legacy
-$BASE = "https://logs.singularthings.io"
-$LOG_INGEST_SECRET = "SECRETO_REAL"
-
-$payloadPath = "$env:TEMP\legacy-smoke.json"
-
-$body = @{
-  message = "bridge_error"
-  bridgeId = "99"
-  bridgeName = "Runbook Smoke"
-  errorText = "Runbook smoke test"
-} | ConvertTo-Json -Compress
-
-$utf8NoBom = New-Object System.Text.UTF8Encoding $false
-[System.IO.File]::WriteAllText($payloadPath, $body, $utf8NoBom)
-
-curl.exe -i -X POST `
-  -H "User-Agent: WalkerPisa-Bridge-Logs" `
-  -H "X-Log-Auth: $LOG_INGEST_SECRET" `
-  -H "Content-Type: application/json" `
-  --data-binary "@$payloadPath" `
-  "$BASE/services/logs/index.php"
-
-Esperado:
-
-HTTP 200
-"ok": true
-"stored": true
-9. Smoke test de ingestión nueva
-$BASE = "https://logs.singularthings.io"
-$LOG_INGEST_SECRET = "SECRETO_REAL"
-$payloadPath = "$env:TEMP\api-ingest-smoke.json"
-$timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss")
-
-$logText = "[$timestamp] [TELEMETRY] INFO: [ff:ff:ff:00:00:99] TELEMETRY -> id=99 name='Runbook Smoke' timestamp=$timestamp | T=20.0C H=50.0% P=1013.0hPa AQ=100.0 (READY acc=3 stab=1 runin=1)"
-
-$body = @{
-  message = "bridge_logs"
-  bridgeId = "99"
-  bridgeName = "Runbook Smoke"
-  logText = $logText
-} | ConvertTo-Json -Compress
-
-$utf8NoBom = New-Object System.Text.UTF8Encoding $false
-[System.IO.File]::WriteAllText($payloadPath, $body, $utf8NoBom)
-
-curl.exe -i -X POST `
-  -H "User-Agent: WalkerPisa-Bridge-Logs" `
-  -H "X-Log-Auth: $LOG_INGEST_SECRET" `
-  -H "Content-Type: application/json" `
-  --data-binary "@$payloadPath" `
-  "$BASE/api/ingest.php"
-
-Esperado:
-
-HTTP 200
-"ok": true
-10. Admin endpoints
-
-Reprocess:
-
-POST /api/admin/reprocess.php
-
-Archive raw:
-
-POST /api/admin/archive_raw.php
-
-Import services logs:
-
-POST /api/admin/import_services_logs.php
-
-Todos deben requerir:
-
-X-Admin-Token: <ADMIN_REPROCESS_TOKEN>
-
-Y deben estar desactivados por defecto salvo necesidad operativa.
-
-11. Backups
-
-Antes de cualquier cambio SQL en producción:
-
-phpMyAdmin → Export → SQL completo → guardar fuera del hosting
-
-Recomendación operativa mínima:
-
-Backup manual mensual de la BD
-Backup antes de migraciones SQL
-Guardar copia en Drive/S3 privado de empresa
-12. Troubleshooting rápido
-
-Si /api/health.php devuelve 503:
-
-Revisar DB en mode=full
-Revisar storage raw/rejected
-No tocar bridges hasta confirmar causa
-
-Si llegan ingests pero no eventos:
-
-Abrir /ingests.php
-Abrir detalle del ingest
-Revisar status, line_count, parsed_ok_count, parsed_error_count
-Buscar eventos con parse_ok=0
-
-Si el legacy responde 403:
-
-Comprobar User-Agent
-Comprobar X-Log-Auth
-Comprobar LOG_INGEST_SECRET en runtime.php
-
-Si el deploy falla:
-
-Revisar job PHPUnit before deploy
-Si PHPUnit falla, corregir código antes de desplegar
-Si FTP falla, revisar credenciales FTP/secrets GitHub/CDmon
+- **FTP**: usuario `deploylogs`, puerto 21 (sin SSH)
+- **phpMyAdmin**: acceso web a MariaDB
+- **GitHub Actions**: deploy manual por workflow dispatch
 
 ---
 
-# Verificación local
+## Health check
 
-```powershell
-php -l .\src\Ingest\LogEventWriter.php
-php -l .\tests\Ingest\LogEventWriterTest.php
+```bash
+curl -i "https://logs.singularthings.io/api/health.php"
+```
 
-vendor\bin\phpunit .\tests\Ingest\LogEventWriterTest.php
-vendor\bin\phpunit
+Respuesta esperada:
 
-Comprueba que el writer ya no tiene el insert por evento:
-````
+```json
+HTTP 200
+{ "ok": true, ... }
+```
 
-Select-String -Path ".\src\Ingest\LogEventWriter.php" -Pattern "array_chunk","INSERT_CHUNK_SIZE","ON DUPLICATE KEY UPDATE"
+---
+
+## Post-deploy checklist
+
+Ejecutar después de cada deploy:
+
+**1. Health check**
+
+```bash
+curl -i "https://logs.singularthings.io/api/health.php"
+```
+
+**2. Verificar que los directorios privados devuelven 403**
+
+https://logs.singularthings.io/src/
+https://logs.singularthings.io/vendor/
+https://logs.singularthings.io/storage/
+https://logs.singularthings.io/services/logs/storage/
+https://logs.singularthings.io/tests/
+
+**3. Test ingesta legacy directa**
+
+```bash
+curl -i "https://logs.singularthings.io/api/ingest.php" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: WalkerPisa-Bridge-Logs" \
+  -H "X-Log-Auth: $SECRET" \
+  --data-binary "@test-legacy-api.json"
+# Esperado: ok=true, processing_mode=legacy_log_text
+```
+
+**4. Test ingesta estructurada directa**
+
+```bash
+curl -i "https://logs.singularthings.io/api/ingest.php" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: WalkerPisa-Bridge-Logs" \
+  -H "X-Log-Auth: $SECRET" \
+  --data-binary "@test-structured-api.json"
+# Esperado: ok=true, processing_mode=structured_events
+```
+
+**5. Test endpoint legacy (bridge path)**
+
+```bash
+curl -i "https://logs.singularthings.io/services/logs/index.php" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: WalkerPisa-Bridge-Logs" \
+  -H "X-Log-Auth: $SECRET" \
+  --data-binary "@test-structured-api.json"
+# Esperado: ok=true, stored=true, forward_attempted=true
+```
+
+---
+
+## SQL de monitorización
+
+Ejecutar en phpMyAdmin.
+
+### Estado general
+
+```sql
+-- Últimos 10 ingests
+SELECT
+  id,
+  received_at,
+  bridge_id_reported,
+  status,
+  line_count,
+  parsed_ok_count,
+  parsed_error_count,
+  JSON_EXTRACT(payload_summary, '$.processedMode') AS processing_mode,
+  processing_started_at,
+  processing_finished_at
+FROM log_ingests
+ORDER BY id DESC
+LIMIT 10;
+
+-- Distribución de estados
+SELECT status, COUNT(*) AS total
+FROM log_ingests
+GROUP BY status;
+
+-- Distribución de modos de procesamiento
+SELECT
+  JSON_EXTRACT(payload_summary, '$.processedMode') AS mode,
+  COUNT(*) AS total
+FROM log_ingests
+GROUP BY mode;
+```
+
+### Monitorización de errores
+
+```sql
+-- Ingests en error
+SELECT id, received_at, bridge_id_reported, status, processing_finished_at
+FROM log_ingests
+WHERE status = 'error'
+ORDER BY id DESC
+LIMIT 20;
+
+-- ALERTA: ingests atascados en 'parsing' (posible zombie)
+-- Si aparecen filas con processing_started_at hace más de 5 min, son zombies.
+SELECT id, received_at, bridge_id_reported, processing_started_at
+FROM log_ingests
+WHERE status = 'parsing'
+ORDER BY id DESC;
+
+-- Últimos 20 eventos
+SELECT
+  id, ingest_id, event_category, event_type,
+  device_mac_raw, parse_ok, parse_error,
+  quality_status, event_timestamp
+FROM log_events
+ORDER BY id DESC
+LIMIT 20;
+
+-- Eventos con parse_error
+SELECT id, ingest_id, parse_error, event_timestamp
+FROM log_events
+WHERE parse_ok = 0
+ORDER BY id DESC
+LIMIT 20;
+```
+
+### Catálogo de categorías y tipos (visor dinámico)
+
+```sql
+SELECT event_category, COUNT(*) AS total
+FROM log_events
+GROUP BY event_category
+ORDER BY total DESC;
+
+SELECT event_type, COUNT(*) AS total
+FROM log_events
+GROUP BY event_type
+ORDER BY total DESC;
+```
+
+### Dispositivos
+
+```sql
+SELECT
+  id, device_kind, external_id, mac_address, name,
+  first_seen_at, last_seen_at
+FROM devices
+ORDER BY last_seen_at DESC;
+```
+
+---
+
+## Procedimientos de incidencia
+
+### P1 — Bridge deja de enviar logs
+
+**Diagnóstico:**
+
+1. Verificar que el bridge está encendido y con red
+2. Comprobar en phpMyAdmin si hay ingests recientes de ese `bridge_id_reported`
+3. Verificar que el secreto `LOG_INGEST_SECRET` coincide con el configurado en el bridge
+4. Comprobar el fichero semanal en `services/logs/storage/bridge_logs_YYYY_WXX.json` (accesible por FTP)
+5. Revisar `storage/rejected/YYYY/MM/DD/rejected_YYYY-MM-DD.ndjson` para ver si hay rechazos
+
+```sql
+-- Último ingest por bridge
+SELECT bridge_id_reported, MAX(received_at) AS ultimo_ingest
+FROM log_ingests
+GROUP BY bridge_id_reported
+ORDER BY ultimo_ingest DESC;
+```
+
+### P2 — Ingests en `status = 'error'`
+
+**Diagnóstico:**
+
+```sql
+SELECT id, bridge_id_reported, received_at, raw_path
+FROM log_ingests
+WHERE status = 'error'
+ORDER BY id DESC LIMIT 10;
+```
+
+**Resolución** — reprocesar via endpoint admin:
+
+```bash
+curl -i -X POST "https://logs.singularthings.io/api/admin/reprocess.php" \
+  -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"ingest_id": 123}'
+```
+
+O reprocesar en batch (activar `REPROCESS_ENABLED=true` en runtime.php primero):
+
+```bash
+curl -i -X POST "https://logs.singularthings.io/api/admin/reprocess.php" \
+  -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"batch": true, "retry_errors": true, "limit": 50}'
+```
+
+### P3 — Ingests atascados en `status = 'parsing'`
+
+Ocurre cuando PHP-FPM interrumpe el proceso durante el parsing (timeout u OOM).
+El reprocesador normal no los recoge porque solo procesa `received` y `error`.
+
+**Resolución** — forzar el reprocesado:
+
+```bash
+curl -i -X POST "https://logs.singularthings.io/api/admin/reprocess.php" \
+  -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"ingest_id": 123, "force": true}'
+```
+
+`force: true` ignora el status actual y borra los eventos previos del ingest antes de reinsertar.
+
+**Resolución manual en SQL** (si el endpoint admin no está disponible):
+
+```sql
+-- Resetear a 'received' para que el reprocesador los recoja
+UPDATE log_ingests
+SET status = 'received',
+    processing_started_at = NULL,
+    processing_finished_at = NULL
+WHERE status = 'parsing'
+  AND processing_started_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE);
+```
+
+### P4 — Forward desde legacy endpoint falla
+
+Síntoma: bridge responde con `ok: true` pero no aparecen registros nuevos en `log_ingests`.
+
+**Diagnóstico:**
+
+1. Revisar `services/logs/storage/bridge_logs_YYYY_WXX.json` — si está ahí, el legacy guardó correctamente
+2. El forward falló: puede ser curl no disponible o error de red interno
+3. Los datos están en el JSON semanal y pueden importarse manualmente
+
+**Resolución** — importar desde JSON semanal:
+
+```bash
+curl -i -X POST "https://logs.singularthings.io/api/admin/import_services_logs.php" \
+  -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"week": "2026_W21"}'
+```
+
+### P5 — Duplicados en `log_events`
+
+No deberían existir duplicados con event_hash no-nulo dado el UNIQUE KEY.
+Verificar:
+
+```sql
+SELECT event_hash, COUNT(*) AS c
+FROM log_events
+WHERE event_hash IS NOT NULL
+GROUP BY event_hash
+HAVING c > 1;
+-- No debe devolver filas
+```
+
+Si hay eventos sin event_hash (parse_ok=0 o legacy), múltiples filas con event_hash NULL
+son normales y permitidas en MariaDB.
+
+---
+
+## Deploy
+
+**Requisitos previos:**
+
+- Tests pasan localmente: `vendor/bin/phpunit`
+- No hay cambios sin commitear
+
+**Ejecutar:**
+
+1. Push a rama `david` (o la que corresponda)
+2. En GitHub → Actions → `Deploy to cdmon` → `Run workflow`
+3. El workflow ejecuta PHPUnit con MariaDB CI antes de subir
+4. Si PHPUnit falla, el FTP deploy no se ejecuta
+
+**Lo que NO sube el workflow:**
+
+- `src/Config/runtime.php` (secretos de producción)
+- `storage/` (datos NDJSON)
+- `services/logs/storage/` (JSONs semanales)
+- `private/`, `tests/`, `docs/`, `scripts/`
+- `docker/`, `docker-compose.yml`
+- Ficheros `test-*.json`
+
+---
+
+## Rate limiting
+
+Configurado por IP + User-Agent + hash del secreto.
+Por defecto: 1000 peticiones por ventana de 600 segundos.
+
+Los ficheros de estado se guardan en `storage/rate-limit/` como JSON por hash de clave.
+El janitor limpia ficheros expirados automáticamente en cada hit.
+
+Para desactivar temporalmente (mantenimiento o migración):
+
+```php
+// En runtime.php
+'INGEST_RATE_LIMIT_ENABLED' => 'false',
+```
+
+---
+
+## Ficheros de configuración clave
+
+| Fichero                              | Descripción                  | ¿Se versiona? | ¿Se sube al deploy? |
+| ------------------------------------ | ---------------------------- | ------------- | ------------------- |
+| `src/Config/runtime.php`             | Secretos y config de entorno | ❌ No         | ❌ No               |
+| `src/Config/runtime.php.dist`        | Plantilla del runtime        | ✅ Sí         | ✅ Sí               |
+| `.htaccess`                          | Reglas de acceso y rewrite   | ✅ Sí         | ✅ Sí               |
+| `docker/mariadb/init/001_schema.sql` | Esquema de BD                | ✅ Sí         | ✅ Sí               |
+| `.github/workflows/deploy-cdmon.yml` | Pipeline de deploy           | ✅ Sí         | —                   |
