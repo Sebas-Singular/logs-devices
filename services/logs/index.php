@@ -353,7 +353,85 @@ function forward_bridge_logs_to_ingest_with_stream($endpoint, $secret, $json)
         "raw_body" => $is_success ? null : truncate_string($body, 1000),
     );
 }
+/*
+    HELPERS
+*/
+function scalar_to_string($value)
+{
+    if (is_null($value)) {
+        return "";
+    }
 
+    if (is_scalar($value)) {
+        return trim((string) $value);
+    }
+
+    return "";
+}
+
+function get_payload_source_device_id($params)
+{
+    if (!isset($params["source"]) || !is_array($params["source"])) {
+        return "";
+    }
+
+    return scalar_to_string($params["source"]["deviceId"] ?? "");
+}
+
+function has_source_identity($params)
+{
+    $bridge_id = scalar_to_string($params["bridgeId"] ?? "");
+    $source_device_id = get_payload_source_device_id($params);
+
+    return $bridge_id !== "" || $source_device_id !== "";
+}
+
+function get_payload_log_text($params)
+{
+    $top_level_log_text = scalar_to_string($params["logText"] ?? "");
+
+    if ($top_level_log_text !== "") {
+        return $top_level_log_text;
+    }
+
+    if (isset($params["raw"]) && is_array($params["raw"])) {
+        return scalar_to_string($params["raw"]["logText"] ?? "");
+    }
+
+    return "";
+}
+
+function has_non_empty_array_of_objects($value)
+{
+    if (!is_array($value) || count($value) === 0) {
+        return false;
+    }
+
+    foreach ($value as $item) {
+        if (is_array($item)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function has_log_processable_content($params)
+{
+    if (get_payload_log_text($params) !== "") {
+        return true;
+    }
+
+    if (has_non_empty_array_of_objects($params["events"] ?? null)) {
+        return true;
+    }
+
+    if (has_non_empty_array_of_objects($params["vehicleEvents"] ?? null)) {
+        return true;
+    }
+
+    return false;
+}
 /*
     RUNTIME CONFIG
 */
@@ -419,13 +497,13 @@ if (!$is_logs_message && !$is_error_message) {
     exit;
 }
 
-if (!isset($params["bridgeId"])) {
-    send_forbidden("Missing bridgeId.");
+if (!has_source_identity($params)) {
+    send_forbidden("Missing source identity.");
     exit;
 }
 
-if ($is_logs_message && (!isset($params["logText"]) || !is_string($params["logText"]))) {
-    send_forbidden("Missing logText.");
+if ($is_logs_message && !has_log_processable_content($params)) {
+    send_forbidden("Missing log content.");
     exit;
 }
 
@@ -477,7 +555,8 @@ if ($is_logs_message) {
         );
     }
 
-    $extracted_errors = extract_error_lines($params["logText"]);
+    $log_text_for_error_extraction = get_payload_log_text($params);
+    $extracted_errors = extract_error_lines($log_text_for_error_extraction);
 
     if (count($extracted_errors) > 0) {
         $error_upload = $upload;

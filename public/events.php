@@ -30,7 +30,8 @@ SecurityHeaders::applyViewer();
 ViewerAuth::enforce();
 
 $severity = readChoice('severity', ['', 'critical', 'error', 'warn', 'info', 'unknown']);
-$eventType = readChoice('event_type', ['', 'telemetry', 'speed', 'unknown']);
+$eventCategory = readSafeFilterValue('event_category', 50);
+$eventType = readSafeFilterValue('event_type', 80);
 $parseOk = readParseOk();
 $from = readDateTimeLocal('from', false);
 $to = readDateTimeLocal('to', true);
@@ -51,6 +52,7 @@ if ($from !== null && $to !== null && strtotime($from) > strtotime($to)) {
 
 $filters = [
     'severity' => $severity !== '' ? $severity : null,
+    'event_category' => $eventCategory !== '' ? $eventCategory : null,
     'event_type' => $eventType !== '' ? $eventType : null,
     'parse_ok' => $parseOk,
     'from' => $from,
@@ -63,8 +65,9 @@ $filters = [
     'offset' => $offset,
 ];
 
-$loadError = null;
 $devices = [];
+$eventCategories = [];
+$eventTypes = [];
 $events = [];
 $totalEvents = 0;
 $totalPages = 1;
@@ -74,6 +77,9 @@ try {
     $queries = new ViewerQueries($pdo);
 
     $devices = $queries->devicesForFilter();
+    $eventCategories = $queries->eventCategoryOptions();
+    $eventTypes = $queries->eventTypeOptions();
+
     $totalEvents = $queries->eventsSearchCount($filters);
     $totalPages = max(1, (int) ceil($totalEvents / $limit));
 
@@ -151,12 +157,42 @@ try {
                     </div>
 
                     <div>
+                        <label for="event_category" class="block text-sm font-medium text-slate-700">Categoría</label>
+                        <select id="event_category" name="event_category" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+                            <option value="" <?= selectedValue($eventCategory, '') ?>>Todas</option>
+
+                            <?php foreach ($eventCategories as $option): ?>
+                                <?php $value = (string) ($option['value'] ?? 'unknown'); ?>
+                                <option value="<?= F::e($value) ?>" <?= selectedValue($eventCategory, $value) ?>>
+                                    <?= F::e($value) ?> (<?= F::number((int) ($option['total'] ?? 0)) ?>)
+                                </option>
+                            <?php endforeach; ?>
+
+                            <?php if ($eventCategory !== '' && !optionValueExists($eventCategories, $eventCategory)): ?>
+                                <option value="<?= F::e($eventCategory) ?>" selected>
+                                    <?= F::e($eventCategory) ?>
+                                </option>
+                            <?php endif; ?>
+                        </select>
+                    </div>
+
+                    <div>
                         <label for="event_type" class="block text-sm font-medium text-slate-700">Tipo evento</label>
                         <select id="event_type" name="event_type" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
                             <option value="" <?= selectedValue($eventType, '') ?>>Todos</option>
-                            <option value="telemetry" <?= selectedValue($eventType, 'telemetry') ?>>telemetry</option>
-                            <option value="speed" <?= selectedValue($eventType, 'speed') ?>>speed</option>
-                            <option value="unknown" <?= selectedValue($eventType, 'unknown') ?>>unknown</option>
+
+                            <?php foreach ($eventTypes as $option): ?>
+                                <?php $value = (string) ($option['value'] ?? 'unknown'); ?>
+                                <option value="<?= F::e($value) ?>" <?= selectedValue($eventType, $value) ?>>
+                                    <?= F::e($value) ?> (<?= F::number((int) ($option['total'] ?? 0)) ?>)
+                                </option>
+                            <?php endforeach; ?>
+
+                            <?php if ($eventType !== '' && !optionValueExists($eventTypes, $eventType)): ?>
+                                <option value="<?= F::e($eventType) ?>" selected>
+                                    <?= F::e($eventType) ?>
+                                </option>
+                            <?php endif; ?>
                         </select>
                     </div>
 
@@ -333,7 +369,11 @@ try {
                                     <td class="whitespace-nowrap px-4 py-3">
                                         <div class="font-medium"><?= F::e($event['event_type']) ?></div>
 
-                                        <span class="mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ring-1 <?= F::parseBadgeClass($parseOk) ?>">
+                                        <div class="mt-1 text-xs text-slate-500">
+                                            <?= F::e($event['event_category'] ?? 'unknown') ?>
+                                        </div>
+
+                                        <span class="mt-2 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ring-1 <?= F::parseBadgeClass($parseOk) ?>">
                                             <?= $parseOk ? 'OK' : 'Error' ?>
                                         </span>
 
@@ -405,6 +445,35 @@ function readChoice(string $key, array $allowed): string
     $value = trim((string) ($_GET[$key] ?? ''));
 
     if (!in_array($value, $allowed, true)) {
+        http_response_code(422);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo "{$key} has an invalid value.";
+        exit;
+    }
+
+    return $value;
+}
+
+function readSafeFilterValue(string $key, int $maxLength): string
+{
+    $value = trim((string) ($_GET[$key] ?? ''));
+
+    if ($value === '') {
+        return '';
+    }
+
+    $length = function_exists('mb_strlen')
+        ? mb_strlen($value, 'UTF-8')
+        : strlen($value);
+
+    if ($length > $maxLength) {
+        http_response_code(422);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo "{$key} is too long.";
+        exit;
+    }
+
+    if (preg_match('/^[A-Za-z0-9_.:-]+$/', $value) !== 1) {
         http_response_code(422);
         header('Content-Type: text/plain; charset=utf-8');
         echo "{$key} has an invalid value.";
@@ -588,4 +657,15 @@ function eventsPageUrl(int $page): string
 function selectedValue(mixed $current, mixed $expected): string
 {
     return (string) $current === (string) $expected ? ' selected' : '';
+}
+
+function optionValueExists(array $options, string $value): bool
+{
+    foreach ($options as $option) {
+        if ((string) ($option['value'] ?? '') === $value) {
+            return true;
+        }
+    }
+
+    return false;
 }

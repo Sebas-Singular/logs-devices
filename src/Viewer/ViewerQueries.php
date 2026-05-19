@@ -161,6 +161,34 @@ final class ViewerQueries
         return $stmt->fetchAll();
     }
 
+    public function eventCategoryOptions(): array
+    {
+        $stmt = $this->pdo->query(
+            "SELECT
+            COALESCE(NULLIF(event_category, ''), 'unknown') AS value,
+            COUNT(*) AS total
+         FROM log_events
+         GROUP BY COALESCE(NULLIF(event_category, ''), 'unknown')
+         ORDER BY value ASC"
+        );
+
+        return $stmt->fetchAll();
+    }
+
+    public function eventTypeOptions(): array
+    {
+        $stmt = $this->pdo->query(
+            "SELECT
+            COALESCE(NULLIF(event_type, ''), 'unknown') AS value,
+            COUNT(*) AS total
+         FROM log_events
+         GROUP BY COALESCE(NULLIF(event_type, ''), 'unknown')
+         ORDER BY value ASC"
+        );
+
+        return $stmt->fetchAll();
+    }
+
     public function findDevice(int $deviceId): ?array
     {
         $stmt = $this->pdo->prepare(
@@ -354,8 +382,13 @@ final class ViewerQueries
             $params['severity'] = (string) $filters['severity'];
         }
 
+        if (!empty($filters['event_category'])) {
+            $where[] = "COALESCE(NULLIF(le.event_category, ''), 'unknown') = :event_category";
+            $params['event_category'] = (string) $filters['event_category'];
+        }
+
         if (!empty($filters['event_type'])) {
-            $where[] = 'le.event_type = :event_type';
+            $where[] = "COALESCE(NULLIF(le.event_type, ''), 'unknown') = :event_type";
             $params['event_type'] = (string) $filters['event_type'];
         }
 
@@ -390,7 +423,14 @@ final class ViewerQueries
         }
 
         if (!empty($filters['q'])) {
-            $where[] = 'le.message_text LIKE :q';
+            $where[] = '(
+                le.message_text LIKE :q
+                OR le.device_mac_raw LIKE :q
+                OR le.event_category LIKE :q
+                OR le.event_type LIKE :q
+                OR le.measurements LIKE :q
+                OR le.context LIKE :q
+            )';
             $params['q'] = '%' . (string) $filters['q'] . '%';
         }
 
@@ -465,8 +505,13 @@ final class ViewerQueries
             $params['severity'] = (string) $filters['severity'];
         }
 
+        if (!empty($filters['event_category'])) {
+            $where[] = "COALESCE(NULLIF(le.event_category, ''), 'unknown') = :event_category";
+            $params['event_category'] = (string) $filters['event_category'];
+        }
+
         if (!empty($filters['event_type'])) {
-            $where[] = 'le.event_type = :event_type';
+            $where[] = "COALESCE(NULLIF(le.event_type, ''), 'unknown') = :event_type";
             $params['event_type'] = (string) $filters['event_type'];
         }
 
@@ -501,7 +546,14 @@ final class ViewerQueries
         }
 
         if (!empty($filters['q'])) {
-            $where[] = 'le.message_text LIKE :q';
+            $where[] = '(
+                le.message_text LIKE :q
+                OR le.device_mac_raw LIKE :q
+                OR le.event_category LIKE :q
+                OR le.event_type LIKE :q
+                OR le.measurements LIKE :q
+                OR le.context LIKE :q
+            )';
             $params['q'] = '%' . (string) $filters['q'] . '%';
         }
 

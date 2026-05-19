@@ -84,26 +84,81 @@ final class IngestValidator
             ];
         }
 
-        $bridgeId = trim((string) ($payload['bridgeId'] ?? ''));
-
-        if ($bridgeId === '') {
+        if (!$this->hasValidSourceIdentity($payload)) {
             return [
                 'status' => 422,
-                'code' => 'missing_bridge_id',
-                'message' => 'bridgeId is required.',
+                'code' => 'missing_source_identity',
+                'message' => 'Payload must include bridgeId or source.deviceId.',
             ];
         }
 
-        $logText = (string) ($payload['logText'] ?? '');
-
-        if (trim($logText) === '') {
+        if (!$this->hasAnyProcessableContent($payload)) {
             return [
                 'status' => 422,
-                'code' => 'missing_log_text',
-                'message' => 'logText is required.',
+                'code' => 'missing_processable_content',
+                'message' => 'Payload must include logText, raw.logText, events[], or vehicleEvents[].',
             ];
         }
 
         return null;
+    }
+
+    private function hasValidSourceIdentity(array $payload): bool
+    {
+        $bridgeId = trim((string) ($payload['bridgeId'] ?? ''));
+
+        if ($bridgeId !== '') {
+            return true;
+        }
+
+        $source = $payload['source'] ?? null;
+
+        if (!is_array($source)) {
+            return false;
+        }
+
+        $sourceDeviceId = trim((string) ($source['deviceId'] ?? ''));
+
+        return $sourceDeviceId !== '';
+    }
+
+    private function hasAnyProcessableContent(array $payload): bool
+    {
+        $logText = trim((string) ($payload['logText'] ?? ''));
+
+        if ($logText !== '') {
+            return true;
+        }
+
+        $raw = $payload['raw'] ?? null;
+
+        if (is_array($raw)) {
+            $rawLogText = trim((string) ($raw['logText'] ?? ''));
+
+            if ($rawLogText !== '') {
+                return true;
+            }
+        }
+
+        if ($this->hasNonEmptyList($payload['events'] ?? null)) {
+            return true;
+        }
+
+        return $this->hasNonEmptyList($payload['vehicleEvents'] ?? null);
+    }
+
+    private function hasNonEmptyList(mixed $value): bool
+    {
+        if (!is_array($value) || $value === []) {
+            return false;
+        }
+
+        foreach ($value as $item) {
+            if (is_array($item)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

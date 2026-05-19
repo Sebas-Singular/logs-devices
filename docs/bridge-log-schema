@@ -68,7 +68,7 @@ Cada evento usa esta base:
   "level": "info",
   "code": "VEHICLE",
   "category": "vehicle",
-  "type": "vehicle_detected",
+  "type": "vehicle_de  tected",
   "message": "Vehicle detected",
   "deviceMac": "34:85:18:46:e3:70",
   "nodeId": 6,
@@ -76,7 +76,7 @@ Cada evento usa esta base:
   "metrics": {},
   "tags": {},
   "raw": "[2026-05-18 09:33:24] [VEHICLE] INFO: [34:85:18:46:e3:70] VEHICLE_DETECTED -> ..."
-}
+}.
 ```
 
 ## Campos base
@@ -147,7 +147,7 @@ Uso:
     "lane": 1,
     "locationId": 4,
     "distanceMm": 229,
-    "positionM": 1.20
+    "positionM": 1.2
   }
 }
 ```

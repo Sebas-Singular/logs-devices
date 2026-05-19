@@ -3,25 +3,23 @@
 declare(strict_types=1);
 
 use App\Database\Connection;
+use App\Device\DeviceResolver;
 use App\Http\JsonResponse;
+use App\Http\RateLimiter;
+use App\Http\SecurityHeaders;
 use App\Ingest\IngestValidator;
+use App\Ingest\LogEventWriter;
+use App\Ingest\LogParser;
+use App\Ingest\PayloadNormalizer;
+use App\Ingest\StructuredEventNormalizer;
+use App\Ingest\VehicleEventNormalizer;
+use App\Parsers\SeverityDeriver;
 use App\Storage\NdjsonWriter;
 use App\Storage\Paths;
-use App\Device\DeviceResolver;
-use App\Ingest\LogParser;
-use App\Parsers\SeverityDeriver;
-use App\Ingest\LogEventWriter;
-use App\Http\SecurityHeaders;
-use App\Http\RateLimiter;
-use App\Support\Env;
 use App\Support\Bootstrap;
-// -----------------------------------------------------------------------------
-// Autoloader de Composer (PSR-4).
-// Una sola línea reemplaza los 5 require_once que había antes.
-// Carga automáticamente cualquier clase en src/ según su namespace.
-// -----------------------------------------------------------------------------
-require_once __DIR__ . '/../../vendor/autoload.php';
+use App\Support\Env;
 
+require_once __DIR__ . '/../../vendor/autoload.php';
 
 Bootstrap::init();
 
@@ -65,7 +63,6 @@ if ($rawBody === false || trim($rawBody) === '') {
 }
 
 $contentHash = hash('sha256', $rawBody);
-
 $payload = json_decode($rawBody, true);
 
 if (json_last_error() !== JSON_ERROR_NONE) {
@@ -96,9 +93,16 @@ if ($payloadError !== null) {
     ], $payloadError['status']);
 }
 
-$bridgeId = trim((string) $payload['bridgeId']);
-$bridgeName = trim((string) ($payload['bridgeName'] ?? ''));
-$logText = (string) $payload['logText'];
+$payloadNormalizer = new PayloadNormalizer();
+$normalizedPayload = $payloadNormalizer->normalize($payload);
+
+$bridgeId = $normalizedPayload['bridge_id_reported'] !== ''
+    ? (string) $normalizedPayload['bridge_id_reported']
+    : 'unknown';
+
+$bridgeName = (string) $normalizedPayload['bridge_name'];
+$logText = (string) $normalizedPayload['raw_log_text'];
+$lineCount = countNormalizedPayloadItems($normalizedPayload, $logText);
 
 $rawRelativePath = buildRawRelativePath($receivedAt, $bridgeId);
 $rawAbsolutePath = Paths::for($rawRelativePath);
@@ -108,9 +112,9 @@ try {
 
     $existingStmt = $pdo->prepare(
         'SELECT id, received_at, raw_path
-         FROM log_ingests
-         WHERE content_hash = :content_hash
-         LIMIT 1'
+FROM log_ingests
+WHERE content_hash = :content_hash
+LIMIT 1'
     );
 
     $existingStmt->execute([
@@ -141,23 +145,6 @@ try {
 
     $writer->append($rawAbsolutePath, $rawRecord);
 
-    $lineCount = countLogLines($logText);
-
-    $payloadSummary = [
-        'bytes' => $payload['bytes'] ?? null,
-        'fromOffset' => $payload['fromOffset'] ?? null,
-        'toOffset' => $payload['toOffset'] ?? null,
-        'sentAt' => $payload['sentAt'] ?? null,
-        'rotated' => $payload['rotated'] ?? null,
-        'bridgeName' => $bridgeName !== '' ? $bridgeName : null,
-    ];
-
-    // -------------------------------------------------------------------------
-    // Resolver el bridge antes del INSERT del ingest
-    // -------------------------------------------------------------------------
-    // Esto permite guardar source_device_id en log_ingests desde el principio,
-    // evitando un UPDATE posterior. Si la creación del bridge falla por algún
-    // motivo, no hay un log_ingests huérfano sin device.
     $deviceResolver = new DeviceResolver($pdo);
     $bridgeDeviceId = $deviceResolver->resolveOrCreateBridge(
         bridgeIdReported: $bridgeId,
@@ -165,145 +152,138 @@ try {
         seenAt: $receivedAt,
     );
 
-    // -------------------------------------------------------------------------
-    // INSERT log_ingests con status='received'
-    // -------------------------------------------------------------------------
     $insertStmt = $pdo->prepare(
         'INSERT INTO log_ingests (
-            received_at,
-            remote_addr,
-            user_agent,
-            source_type,
-            source_device_id,
-            bridge_id_reported,
-            content_hash,
-            raw_path,
-            payload_summary,
-            status,
-            line_count,
-            parsed_ok_count,
-            parsed_error_count,
-            processing_started_at,
-            processing_finished_at
-        ) VALUES (
-            :received_at,
-            :remote_addr,
-            :user_agent,
-            :source_type,
-            :source_device_id,
-            :bridge_id_reported,
-            :content_hash,
-            :raw_path,
-            :payload_summary,
-            :status,
-            :line_count,
-            0,
-            0,
-            NULL,
-            NULL
-        )'
+received_at,
+remote_addr,
+user_agent,
+source_type,
+source_device_id,
+bridge_id_reported,
+content_hash,
+raw_path,
+payload_summary,
+status,
+line_count,
+parsed_ok_count,
+parsed_error_count,
+processing_started_at,
+processing_finished_at
+) VALUES (
+:received_at,
+:remote_addr,
+:user_agent,
+:source_type,
+:source_device_id,
+:bridge_id_reported,
+:content_hash,
+:raw_path,
+:payload_summary,
+:status,
+:line_count,
+0,
+0,
+NULL,
+NULL
+)'
     );
 
     $insertStmt->execute([
-        'received_at'        => $receivedAtSql,
-        'remote_addr'        => (string) ($_SERVER['REMOTE_ADDR'] ?? ''),
-        'user_agent'         => (string) ($_SERVER['HTTP_USER_AGENT'] ?? ''),
-        'source_type'        => 'walkerpisa_bridge',
-        'source_device_id'   => $bridgeDeviceId,
+        'received_at' => $receivedAtSql,
+        'remote_addr' => (string) ($_SERVER['REMOTE_ADDR'] ?? ''),
+        'user_agent' => (string) ($_SERVER['HTTP_USER_AGENT'] ?? ''),
+        'source_type' => truncateForColumn((string) $normalizedPayload['source_type'], 30),
+        'source_device_id' => $bridgeDeviceId,
         'bridge_id_reported' => $bridgeId,
-        'content_hash'       => $contentHash,
-        'raw_path'           => $rawRelativePath,
-        'payload_summary'    => json_encode($payloadSummary, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
-        'status'             => 'received',
-        'line_count'         => $lineCount,
+        'content_hash' => $contentHash,
+        'raw_path' => $rawRelativePath,
+        'payload_summary' => jsonForDb($normalizedPayload['payload_summary']),
+        'status' => 'received',
+        'line_count' => $lineCount,
     ]);
 
     $ingestId = (int) $pdo->lastInsertId();
 
-    // -------------------------------------------------------------------------
-    // Procesamiento inline: parsear líneas e insertar en log_events
-    // -------------------------------------------------------------------------
-    // Marcar el ingest como 'parsing' antes de empezar. Si algo falla a mitad,
-    // el catch lo dejará como 'error' con processing_finished_at registrado.
     $processingStartedAt = (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
 
     $pdo->prepare(
         'UPDATE log_ingests
-            SET status                = :status,
-                processing_started_at = :started_at
-          WHERE id = :id'
+SET status = :status,
+processing_started_at = :started_at
+WHERE id = :id'
     )->execute([
-        'status'     => 'parsing',
+        'status' => 'parsing',
         'started_at' => $processingStartedAt,
-        'id'         => $ingestId,
+        'id' => $ingestId,
     ]);
 
-    // El orquestador parsea, resuelve balizas y construye los eventos.
-    // No inserta nada en BD por sí mismo.
-    $logParser = new LogParser($deviceResolver, new SeverityDeriver());
-
-    $parseResult = $logParser->processIngest(
+    $parseResult = processNormalizedPayload(
+        normalizedPayload: $normalizedPayload,
         logText: $logText,
         ingestId: $ingestId,
         bridgeDeviceId: $bridgeDeviceId,
         receivedAt: $receivedAt,
+        deviceResolver: $deviceResolver,
     );
 
     $pdo->beginTransaction();
 
     try {
         $eventWriter = new LogEventWriter($pdo);
-        $eventWriter->insertEvents($parseResult['events']);
+        $insertedEvents = $eventWriter->insertEvents($parseResult['events']);
 
         $processingFinishedAt = (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
 
         $pdo->prepare(
             'UPDATE log_ingests
-                SET status                 = :status,
-                    parsed_ok_count        = :ok_count,
-                    parsed_error_count     = :err_count,
-                    processing_finished_at = :finished_at
-              WHERE id = :id'
+SET status = :status,
+parsed_ok_count = :ok_count,
+parsed_error_count = :err_count,
+processing_finished_at = :finished_at
+WHERE id = :id'
         )->execute([
-            'status'      => 'processed',
-            'ok_count'    => $parseResult['parsed_ok'],
-            'err_count'   => $parseResult['parsed_error'],
+            'status' => 'processed',
+            'ok_count' => $parseResult['parsed_ok'],
+            'err_count' => $parseResult['parsed_error'],
             'finished_at' => $processingFinishedAt,
-            'id'          => $ingestId,
+            'id' => $ingestId,
         ]);
 
         $pdo->commit();
     } catch (Throwable $eventInsertError) {
-
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
 
         $pdo->prepare(
             'UPDATE log_ingests
-                SET status                 = :status,
-                    processing_finished_at = :finished_at
-              WHERE id = :id'
+SET status = :status,
+processing_finished_at = :finished_at
+WHERE id = :id'
         )->execute([
-            'status'      => 'error',
+            'status' => 'error',
             'finished_at' => (new DateTimeImmutable('now'))->format('Y-m-d H:i:s'),
-            'id'          => $ingestId,
+            'id' => $ingestId,
         ]);
+
         throw $eventInsertError;
     }
 
     JsonResponse::send([
-        'ok'             => true,
-        'duplicate'      => false,
-        'message'        => 'Payload received and processed.',
-        'ingest_id'      => $ingestId,
-        'bridge_id'      => $bridgeId,
+        'ok' => true,
+        'duplicate' => false,
+        'message' => 'Payload received and processed.',
+        'ingest_id' => $ingestId,
+        'bridge_id' => $bridgeId,
         'bridge_device_id' => $bridgeDeviceId,
-        'line_count'     => $lineCount,
-        'parsed_ok'      => $parseResult['parsed_ok'],
-        'parsed_error'   => $parseResult['parsed_error'],
-        'raw_path'       => $rawRelativePath,
-        'content_hash'   => $contentHash,
+        'processing_mode' => $normalizedPayload['processing_mode'],
+        'line_count' => $lineCount,
+        'parsed_ok' => $parseResult['parsed_ok'],
+        'parsed_error' => $parseResult['parsed_error'],
+        'events_attempted' => count($parseResult['events']),
+        'events_inserted' => $insertedEvents,
+        'raw_path' => $rawRelativePath,
+        'content_hash' => $contentHash,
     ]);
 } catch (Throwable $exception) {
     $error = [
@@ -319,6 +299,96 @@ try {
         'error' => 'ingest_failed',
         'message' => $exception->getMessage(),
     ], 500);
+}
+
+function processNormalizedPayload(
+    array $normalizedPayload,
+    string $logText,
+    int $ingestId,
+    int $bridgeDeviceId,
+    DateTimeImmutable $receivedAt,
+    DeviceResolver $deviceResolver
+): array {
+    if ($normalizedPayload['processing_mode'] === PayloadNormalizer::MODE_STRUCTURED_EVENTS) {
+        $normalizer = new StructuredEventNormalizer();
+
+        return $normalizer->normalizeEvents(
+            events: $normalizedPayload['events'],
+            ingestId: $ingestId,
+            bridgeDeviceId: $bridgeDeviceId,
+            receivedAt: $receivedAt,
+            payloadContext: [
+                'source' => $normalizedPayload['source'],
+                'upload' => $normalizedPayload['upload'],
+            ],
+            resolveDeviceId: buildBeaconResolver($deviceResolver, $bridgeDeviceId),
+        );
+    }
+
+    if ($normalizedPayload['processing_mode'] === PayloadNormalizer::MODE_VEHICLE_EVENTS) {
+        $normalizer = new VehicleEventNormalizer();
+
+        return $normalizer->normalizeEvents(
+            vehicleEvents: $normalizedPayload['vehicle_events'],
+            ingestId: $ingestId,
+            bridgeDeviceId: $bridgeDeviceId,
+            receivedAt: $receivedAt,
+            payloadContext: [
+                'source' => $normalizedPayload['source'],
+                'upload' => $normalizedPayload['upload'],
+            ],
+            resolveDeviceId: buildBeaconResolver($deviceResolver, $bridgeDeviceId),
+        );
+    }
+
+    $logParser = new LogParser($deviceResolver, new SeverityDeriver());
+
+    return $logParser->processIngest(
+        logText: $logText,
+        ingestId: $ingestId,
+        bridgeDeviceId: $bridgeDeviceId,
+        receivedAt: $receivedAt,
+    );
+}
+
+function buildBeaconResolver(DeviceResolver $deviceResolver, int $bridgeDeviceId): callable
+{
+    $beaconCache = [];
+
+    return static function (
+        string $mac,
+        ?string $externalId,
+        ?string $name,
+        DateTimeImmutable $seenAt
+    ) use ($deviceResolver, $bridgeDeviceId, &$beaconCache): int {
+        $cacheKey = strtolower($mac);
+
+        if (isset($beaconCache[$cacheKey])) {
+            return $beaconCache[$cacheKey];
+        }
+
+        $deviceId = $deviceResolver->resolveOrCreateBeacon(
+            mac: strtolower($mac),
+            externalId: $externalId,
+            name: $name,
+            bridgeDeviceId: $bridgeDeviceId,
+            seenAt: $seenAt,
+        );
+
+        $beaconCache[$cacheKey] = $deviceId;
+
+        return $deviceId;
+    };
+}
+
+function countNormalizedPayloadItems(array $normalizedPayload, string $logText): int
+{
+    return match ($normalizedPayload['processing_mode']) {
+        PayloadNormalizer::MODE_STRUCTURED_EVENTS => count($normalizedPayload['events']),
+        PayloadNormalizer::MODE_VEHICLE_EVENTS => count($normalizedPayload['vehicle_events']),
+        PayloadNormalizer::MODE_LEGACY_LOG_TEXT => countLogLines($logText),
+        default => 0,
+    };
 }
 
 function countLogLines(string $logText): int
@@ -387,6 +457,22 @@ function writeRejectedRequest(
         $writer->append($absolutePath, $record);
     } catch (Throwable) {
     }
+}
+
+function jsonForDb(mixed $value): string
+{
+    $encoded = json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+    return $encoded !== false ? $encoded : 'null';
+}
+
+function truncateForColumn(string $value, int $maxLength): string
+{
+    if (strlen($value) <= $maxLength) {
+        return $value;
+    }
+
+    return substr($value, 0, $maxLength);
 }
 
 function applyIngestRateLimit(): void

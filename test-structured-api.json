@@ -1,0 +1,59 @@
+{
+  "message": "bridge_logs",
+  "schemaVersion": 1,
+  "source": {
+    "project": "walkerpisa",
+    "product": "bridge",
+    "deviceType": "bridge",
+    "deviceId": 120,
+    "deviceName": "WalkerPisa Bridge",
+    "firmwareVersion": "0.11.1",
+    "serialNumber": ""
+  },
+  "upload": {
+    "sentAt": "2026-05-18 13:52:49",
+    "fromOffset": 0,
+    "toOffset": 100,
+    "rotated": false,
+    "bytes": 100
+  },
+  "raw": {
+    "format": "plain-text",
+    "logText": "[2026-05-18 13:48:03] [TELEMETRY] INFO: [34:85:18:46:e4:20] TELEMETRY -> id=08 name='Baliza 08 - Las Rozas' timestamp=2026-05-18 13:48:03 | T=30.2C H=27.46% P=937.0hPa AQ=88.2 (WARMUP acc=1 stab=1 runin=1) alt=654m | LiDAR=2159mm | SOC=71% CHARGING (AC) | RSSI=-10 | LANE=1 LOC=1 POS=10000 REF=1531 SX=90.0 SY=90.0"
+  },
+  "eventCount": 1,
+  "events": [
+    {
+      "ts": "2026-05-18 13:48:03",
+      "level": "info",
+      "code": "TELEMETRY",
+      "category": "telemetry",
+      "type": "telemetry_snapshot",
+      "message": "Telemetry snapshot",
+      "raw": "[2026-05-18 13:48:03] [TELEMETRY] INFO: [34:85:18:46:e4:20] TELEMETRY -> id=08 name='Baliza 08 - Las Rozas' timestamp=2026-05-18 13:48:03 | T=30.2C H=27.46% P=937.0hPa AQ=88.2 (WARMUP acc=1 stab=1 runin=1) alt=654m | LiDAR=2159mm | SOC=71% CHARGING (AC) | RSSI=-10 | LANE=1 LOC=1 POS=10000 REF=1531 SX=90.0 SY=90.0",
+      "eventTs": "2026-05-18 13:48:03",
+      "deviceMac": "34:85:18:46:e4:20",
+      "nodeId": 8,
+      "nodeName": "Baliza 08 - Las Rozas",
+      "metrics": {
+        "temperatureC": 30.2,
+        "humidityPct": 27.46,
+        "pressureHpa": 937,
+        "airQuality": 88.2,
+        "socPct": 71,
+        "parentRssi": -10
+      },
+      "tags": {
+        "chargingState": "CHARGING",
+        "iaqState": "WARMUP"
+      },
+      "gps": {
+        "error": 1,
+        "latitude": null,
+        "longitude": null,
+        "altitude": null
+      }
+    }
+  ],
+  "vehicleEventCount": 0
+}

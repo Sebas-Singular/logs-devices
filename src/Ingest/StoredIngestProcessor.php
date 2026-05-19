@@ -149,20 +149,29 @@ final class StoredIngestProcessor
 
             $payload = $this->findPayloadForIngest($ingest);
 
-            $bridgeId = trim((string) ($payload['bridgeId'] ?? $ingest['bridge_id_reported'] ?? ''));
-            $bridgeName = trim((string) ($payload['bridgeName'] ?? ''));
-            $logText = (string) ($payload['logText'] ?? '');
+            $payloadNormalizer = new PayloadNormalizer();
+            $normalizedPayload = $payloadNormalizer->normalize($payload);
+
+            $bridgeId = (string) ($normalizedPayload['bridge_id_reported'] ?? '');
 
             if ($bridgeId === '') {
-                throw new RuntimeException('Payload does not contain bridgeId.');
+                $bridgeId = trim((string) ($ingest['bridge_id_reported'] ?? ''));
             }
 
-            if (trim($logText) === '') {
-                throw new RuntimeException('Payload does not contain logText.');
+            $bridgeName = (string) ($normalizedPayload['bridge_name'] ?? '');
+            $logText = (string) ($normalizedPayload['raw_log_text'] ?? '');
+            $processingMode = (string) ($normalizedPayload['processing_mode'] ?? PayloadNormalizer::MODE_EMPTY);
+
+            if ($bridgeId === '') {
+                throw new RuntimeException('Payload does not contain bridgeId or source.deviceId.');
+            }
+
+            if ($processingMode === PayloadNormalizer::MODE_EMPTY) {
+                throw new RuntimeException('Payload does not contain logText, raw.logText, events[], or vehicleEvents[].');
             }
 
             $receivedAt = new DateTimeImmutable((string) $ingest['received_at']);
-            $lineCount = count(BaseLineParser::splitRawLines($logText));
+            $lineCount = $this->countNormalizedPayloadItems($normalizedPayload, $logText);
 
             $this->pdo->beginTransaction();
 
@@ -180,16 +189,13 @@ final class StoredIngestProcessor
                 seenAt: $receivedAt,
             );
 
-            $logParser = new LogParser(
-                $deviceResolver,
-                new SeverityDeriver(),
-            );
-
-            $parseResult = $logParser->processIngest(
+            $parseResult = $this->processNormalizedPayload(
+                normalizedPayload: $normalizedPayload,
                 logText: $logText,
                 ingestId: $ingestId,
                 bridgeDeviceId: $bridgeDeviceId,
                 receivedAt: $receivedAt,
+                deviceResolver: $deviceResolver,
             );
 
             $eventWriter = new LogEventWriter($this->pdo);
@@ -198,6 +204,9 @@ final class StoredIngestProcessor
             $this->markProcessed(
                 ingestId: $ingestId,
                 bridgeDeviceId: $bridgeDeviceId,
+                bridgeId: $bridgeId,
+                sourceType: $this->truncateForColumn((string) ($normalizedPayload['source_type'] ?? 'walkerpisa_bridge'), 30),
+                payloadSummary: $normalizedPayload['payload_summary'] ?? [],
                 lineCount: $lineCount,
                 parsedOk: (int) $parseResult['parsed_ok'],
                 parsedError: (int) $parseResult['parsed_error'],
@@ -210,6 +219,7 @@ final class StoredIngestProcessor
                 'outcome'          => 'processed',
                 'bridge_id'        => $bridgeId,
                 'bridge_device_id' => $bridgeDeviceId,
+                'processing_mode'  => $processingMode,
                 'line_count'       => $lineCount,
                 'parsed_ok'        => (int) $parseResult['parsed_ok'],
                 'parsed_error'     => (int) $parseResult['parsed_error'],
@@ -245,6 +255,99 @@ final class StoredIngestProcessor
         }
 
         return $retryErrors && $status === 'error';
+    }
+
+    private function processNormalizedPayload(
+        array $normalizedPayload,
+        string $logText,
+        int $ingestId,
+        int $bridgeDeviceId,
+        DateTimeImmutable $receivedAt,
+        DeviceResolver $deviceResolver
+    ): array {
+        if ($normalizedPayload['processing_mode'] === PayloadNormalizer::MODE_STRUCTURED_EVENTS) {
+            $normalizer = new StructuredEventNormalizer();
+
+            return $normalizer->normalizeEvents(
+                events: $normalizedPayload['events'],
+                ingestId: $ingestId,
+                bridgeDeviceId: $bridgeDeviceId,
+                receivedAt: $receivedAt,
+                payloadContext: [
+                    'source' => $normalizedPayload['source'],
+                    'upload' => $normalizedPayload['upload'],
+                ],
+                resolveDeviceId: $this->buildBeaconResolver($deviceResolver, $bridgeDeviceId),
+            );
+        }
+
+        if ($normalizedPayload['processing_mode'] === PayloadNormalizer::MODE_VEHICLE_EVENTS) {
+            $normalizer = new VehicleEventNormalizer();
+
+            return $normalizer->normalizeEvents(
+                vehicleEvents: $normalizedPayload['vehicle_events'],
+                ingestId: $ingestId,
+                bridgeDeviceId: $bridgeDeviceId,
+                receivedAt: $receivedAt,
+                payloadContext: [
+                    'source' => $normalizedPayload['source'],
+                    'upload' => $normalizedPayload['upload'],
+                ],
+                resolveDeviceId: $this->buildBeaconResolver($deviceResolver, $bridgeDeviceId),
+            );
+        }
+
+        $logParser = new LogParser(
+            $deviceResolver,
+            new SeverityDeriver(),
+        );
+
+        return $logParser->processIngest(
+            logText: $logText,
+            ingestId: $ingestId,
+            bridgeDeviceId: $bridgeDeviceId,
+            receivedAt: $receivedAt,
+        );
+    }
+
+    private function buildBeaconResolver(DeviceResolver $deviceResolver, int $bridgeDeviceId): callable
+    {
+        $beaconCache = [];
+
+        return static function (
+            string $mac,
+            ?string $externalId,
+            ?string $name,
+            DateTimeImmutable $seenAt
+        ) use ($deviceResolver, $bridgeDeviceId, &$beaconCache): int {
+            $cacheKey = strtolower($mac);
+
+            if (isset($beaconCache[$cacheKey])) {
+                return $beaconCache[$cacheKey];
+            }
+
+            $deviceId = $deviceResolver->resolveOrCreateBeacon(
+                mac: strtolower($mac),
+                externalId: $externalId,
+                name: $name,
+                bridgeDeviceId: $bridgeDeviceId,
+                seenAt: $seenAt,
+            );
+
+            $beaconCache[$cacheKey] = $deviceId;
+
+            return $deviceId;
+        };
+    }
+
+    private function countNormalizedPayloadItems(array $normalizedPayload, string $logText): int
+    {
+        return match ($normalizedPayload['processing_mode']) {
+            PayloadNormalizer::MODE_STRUCTURED_EVENTS => count($normalizedPayload['events']),
+            PayloadNormalizer::MODE_VEHICLE_EVENTS => count($normalizedPayload['vehicle_events']),
+            PayloadNormalizer::MODE_LEGACY_LOG_TEXT => count(BaseLineParser::splitRawLines($logText)),
+            default => 0,
+        };
     }
 
     private function findPayloadForIngest(array $ingest): array
@@ -329,6 +432,9 @@ final class StoredIngestProcessor
     private function markProcessed(
         int $ingestId,
         int $bridgeDeviceId,
+        string $bridgeId,
+        string $sourceType,
+        array $payloadSummary,
         int $lineCount,
         int $parsedOk,
         int $parsedError
@@ -336,7 +442,10 @@ final class StoredIngestProcessor
         $stmt = $this->pdo->prepare(
             'UPDATE log_ingests
                 SET status                 = :status,
+                    source_type            = :source_type,
                     source_device_id       = :source_device_id,
+                    bridge_id_reported     = :bridge_id_reported,
+                    payload_summary        = :payload_summary,
                     line_count             = :line_count,
                     parsed_ok_count        = :parsed_ok_count,
                     parsed_error_count     = :parsed_error_count,
@@ -346,7 +455,10 @@ final class StoredIngestProcessor
 
         $stmt->execute([
             'status'             => 'processed',
+            'source_type'        => $sourceType,
             'source_device_id'   => $bridgeDeviceId,
+            'bridge_id_reported' => $bridgeId,
+            'payload_summary'    => $this->jsonForDb($payloadSummary),
             'line_count'         => $lineCount,
             'parsed_ok_count'    => $parsedOk,
             'parsed_error_count' => $parsedError,
@@ -381,5 +493,21 @@ final class StoredIngestProcessor
         $stmt->execute([
             'ingest_id' => $ingestId,
         ]);
+    }
+
+    private function jsonForDb(mixed $value): string
+    {
+        $encoded = json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        return $encoded !== false ? $encoded : 'null';
+    }
+
+    private function truncateForColumn(string $value, int $maxLength): string
+    {
+        if (strlen($value) <= $maxLength) {
+            return $value;
+        }
+
+        return substr($value, 0, $maxLength);
     }
 }
