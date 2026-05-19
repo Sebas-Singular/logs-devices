@@ -169,14 +169,17 @@ $severityOrder = ['critical', 'error', 'warn', 'info', 'unknown'];
 
                     <div class="mt-5 grid gap-3 sm:grid-cols-2">
                         <?php foreach ($severityOrder as $severity): ?>
-                            <div class="flex items-center justify-between rounded-xl border border-slate-200 p-4">
+                            <?php $count = $severityCounts[$severity] ?? 0; ?>
+                            <a href="/events.php?severity=<?= urlencode($severity) ?>"
+                                class="group flex items-center justify-between rounded-xl border border-slate-200 p-4
+                                    transition-colors hover:border-sky-200 hover:bg-sky-50">
                                 <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 <?= F::severityBadgeClass($severity) ?>">
                                     <?= F::e(F::severityLabel($severity)) ?>
                                 </span>
-                                <span class="text-lg font-bold">
-                                    <?= F::number($severityCounts[$severity] ?? 0) ?>
+                                <span class="text-lg font-bold transition-colors group-hover:text-sky-700">
+                                    <?= F::number($count) ?>
                                 </span>
-                            </div>
+                            </a>
                         <?php endforeach; ?>
                     </div>
                 </article>
@@ -196,8 +199,11 @@ $severityOrder = ['critical', 'error', 'warn', 'info', 'unknown'];
                             <tbody class="divide-y divide-slate-200 bg-white">
                                 <?php foreach ($eventTypeCounts as $row): ?>
                                     <?php $parseOk = ((int) $row['parse_ok']) === 1; ?>
-                                    <tr>
-                                        <td class="px-4 py-3 font-medium"><?= F::e($row['event_type']) ?></td>
+                                    <tr class="group hover:bg-slate-50 cursor-pointer"
+                                        onclick="window.location='/events.php?event_type=<?= urlencode((string) $row['event_type']) ?>'">
+                                        <td class="px-4 py-3 font-medium group-hover:text-sky-700 transition-colors">
+                                            <?= F::e($row['event_type']) ?>
+                                        </td>
                                         <td class="px-4 py-3">
                                             <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 <?= F::parseBadgeClass($parseOk) ?>">
                                                 <?= $parseOk ? 'OK' : 'Error' ?>
