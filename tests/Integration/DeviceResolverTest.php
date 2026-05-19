@@ -281,4 +281,41 @@ final class DeviceResolverTest extends TestCase
 
         $this->assertSame('0.11.1', $meta['firmware_version'] ?? null);
     }
+
+    public function testResolveOrCreateBeacon_movesToDifferentBridge_updatesParentDeviceId(): void
+    {
+        $seenAt = new DateTimeImmutable('2026-05-01 10:00:00');
+
+        // Crear bridge A y bridge B
+        $bridgeA = $this->resolver->resolveOrCreateBridge('test_bridge_999', 'Bridge A', $seenAt);
+        $bridgeB = $this->resolver->resolveOrCreateBridge('test_bridge_998', 'Bridge B', $seenAt);
+
+        // Primera vez: baliza llega por bridge A
+        $balizaId = $this->resolver->resolveOrCreateBeacon(
+            mac: self::TEST_MAC_1,
+            externalId: '01',
+            name: 'Test Baliza',
+            bridgeDeviceId: $bridgeA,
+            seenAt: $seenAt,
+        );
+
+        $row = $this->fetchDevice($balizaId);
+        $this->assertSame($bridgeA, (int) $row['parent_device_id']);
+
+        // Segunda vez: misma baliza llega por bridge B
+        $this->resolver->resolveOrCreateBeacon(
+            mac: self::TEST_MAC_1,
+            externalId: '01',
+            name: 'Test Baliza',
+            bridgeDeviceId: $bridgeB,
+            seenAt: new DateTimeImmutable('2026-05-02 10:00:00'),
+        );
+
+        $row = $this->fetchDevice($balizaId);
+        $this->assertSame(
+            $bridgeB,
+            (int) $row['parent_device_id'],
+            'parent_device_id debe actualizarse al nuevo bridge'
+        );
+    }
 }

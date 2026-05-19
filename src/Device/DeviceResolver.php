@@ -126,6 +126,10 @@ final class DeviceResolver
 
             $this->updateLastSeenAt($deviceId, $seenAtSql);
 
+            if ((int) $existing['parent_device_id'] !== $bridgeDeviceId) {
+                $this->updateBeaconBridge($deviceId, $bridgeDeviceId);
+            }
+
             if (
                 $name !== null
                 && $name !== ''
@@ -161,11 +165,11 @@ final class DeviceResolver
     private function findBeaconByMac(string $mac): array|false
     {
         $stmt = $this->pdo->prepare(
-            'SELECT id, name, name_origin
-               FROM devices
-              WHERE device_kind = :kind
-                AND mac_address = :mac
-              LIMIT 1'
+            'SELECT id, name, name_origin, parent_device_id
+           FROM devices
+          WHERE device_kind = :kind
+            AND mac_address = :mac
+          LIMIT 1'
         );
 
         $stmt->execute(['kind' => 'baliza', 'mac' => $mac]);
@@ -179,12 +183,12 @@ final class DeviceResolver
         $padded     = str_pad($externalId, 2, '0', STR_PAD_LEFT);
 
         $stmt = $this->pdo->prepare(
-            'SELECT id, name, name_origin
-               FROM devices
-              WHERE device_kind      = :kind
-                AND parent_device_id = :parent_id
-                AND external_id     IN (:raw, :normalized, :padded)
-              LIMIT 1'
+            'SELECT id, name, name_origin, parent_device_id
+           FROM devices
+          WHERE device_kind      = :kind
+            AND parent_device_id = :parent_id
+            AND external_id     IN (:raw, :normalized, :padded)
+          LIMIT 1'
         );
 
         $stmt->execute([
@@ -246,6 +250,21 @@ final class DeviceResolver
         );
 
         $stmt->execute(['mac' => $mac, 'id' => $deviceId]);
+    }
+
+    private function updateBeaconBridge(int $deviceId, int $newBridgeDeviceId): void
+    {
+        $stmt = $this->pdo->prepare(
+            'UPDATE devices
+            SET parent_device_id = :bridge_id,
+                updated_at       = NOW()
+          WHERE id = :id'
+        );
+
+        $stmt->execute([
+            'bridge_id' => $newBridgeDeviceId,
+            'id'        => $deviceId,
+        ]);
     }
 
     /**

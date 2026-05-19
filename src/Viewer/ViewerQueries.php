@@ -161,6 +161,49 @@ final class ViewerQueries
         return $stmt->fetchAll();
     }
 
+    public function historicalBalizasByBridge(): array
+    {
+        $stmt = $this->pdo->query(
+            'SELECT
+            le.bridge_device_id               AS historical_bridge_id,
+            d.id                              AS baliza_id,
+            d.name                            AS baliza_name,
+            d.mac_address                     AS baliza_mac,
+            d.external_id                     AS baliza_external_id,
+            d.parent_device_id                AS current_bridge_id,
+            cb.name                           AS current_bridge_name,
+            cb.external_id                    AS current_bridge_external_id,
+            COUNT(le.id)                      AS event_count,
+            MAX(le.event_timestamp)           AS last_event_at
+         FROM log_events le
+         JOIN devices d
+           ON d.id = le.device_id
+          AND d.device_kind = \'baliza\'
+         JOIN devices cb
+           ON cb.id = d.parent_device_id
+        WHERE le.bridge_device_id IS NOT NULL
+          AND le.bridge_device_id != d.parent_device_id
+        GROUP BY
+            le.bridge_device_id,
+            d.id,
+            d.name,
+            d.mac_address,
+            d.external_id,
+            d.parent_device_id,
+            cb.name,
+            cb.external_id'
+        );
+
+        $result = [];
+
+        foreach ($stmt->fetchAll() as $row) {
+            $bridgeId = (int) $row['historical_bridge_id'];
+            $result[$bridgeId][] = $row;
+        }
+
+        return $result;
+    }
+
     public function eventCategoryOptions(): array
     {
         $stmt = $this->pdo->query(

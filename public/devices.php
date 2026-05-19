@@ -28,12 +28,16 @@ ViewerAuth::enforce();
 
 $loadError = null;
 $devices   = [];
+$historicalBalizas = [];
+
 
 try {
     $pdo     = Connection::make();
     $queries = new ViewerQueries($pdo);
     $devices = $queries->devicesList();
+    $historicalBalizas = $queries->historicalBalizasByBridge();
 } catch (Throwable $exception) {
+    $historicalBalizas = [];
     http_response_code(500);
     $loadError = $exception->getMessage();
 }
@@ -359,18 +363,15 @@ foreach ($devices as $device) {
                                     ?>
                                     <div class="flex items-center gap-4 px-5 py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
 
-                                        <!-- Conector visual -->
                                         <div class="flex-shrink-0 flex items-center gap-1 ml-7">
                                             <div class="w-px h-4 bg-slate-300"></div>
                                             <div class="w-3 h-px bg-slate-300"></div>
                                         </div>
 
-                                        <!-- Badge -->
                                         <span class="inline-flex flex-shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 <?= F::deviceKindBadgeClass('baliza') ?>">
                                             Baliza
                                         </span>
 
-                                        <!-- Nombre · External ID · MAC -->
                                         <div class="flex-1 min-w-0">
                                             <a class="font-medium text-slate-800 hover:text-sky-700 hover:underline transition-colors text-sm"
                                                 href="/device.php?id=<?= F::e($baliza['id']) ?>">
@@ -384,7 +385,6 @@ foreach ($devices as $device) {
                                             </div>
                                         </div>
 
-                                        <!-- Contadores (mismos anchos que bridge para alineación) -->
                                         <div class="flex items-center gap-4 flex-shrink-0">
                                             <div class="w-16 text-center">
                                                 <div class="font-semibold text-slate-700"><?= F::number($nEvents) ?></div>
@@ -398,7 +398,7 @@ foreach ($devices as $device) {
                                                 <div class="font-semibold <?= $nErrors > 0 ? 'text-red-700' : 'text-slate-400' ?>"><?= F::number($nErrors) ?></div>
                                                 <div class="text-xs text-slate-500">error</div>
                                             </div>
-                                            <div class="w-14"></div><!-- spacer columna "balizas" -->
+                                            <div class="w-14"></div>
                                             <div class="w-40 text-right text-xs text-slate-500 hidden lg:block">
                                                 <div>Último evento</div>
                                                 <div class="font-medium text-slate-700"><?= F::datetime($baliza['last_event_at'] ?? null) ?></div>
@@ -407,59 +407,134 @@ foreach ($devices as $device) {
                                     </div>
                                 <?php endforeach; ?>
                             </div>
-                        </div>
-                    <?php endforeach; ?>
+                        <?php endforeach; ?>
 
-                    <!-- Balizas huérfanas (sin bridge padre conocido) -->
-                    <?php if (!empty($orphans)): ?>
-                        <div class="overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm">
-                            <div class="flex items-center gap-3 px-5 py-3 bg-amber-50 border-b border-amber-200">
-                                <span class="text-sm font-medium text-amber-800">Sin bridge asignado</span>
-                                <span class="text-xs text-amber-600"><?= count($orphans) ?> dispositivo(s)</span>
-                            </div>
-                            <?php foreach ($orphans as $orphan): ?>
-                                <?php
-                                $oEvents = (int) ($orphan['event_count'] ?? 0);
-                                $oWarns  = (int) ($orphan['warn_count'] ?? 0);
-                                $oErrors = (int) ($orphan['error_count'] ?? 0) + (int) ($orphan['critical_count'] ?? 0);
-                                ?>
-                                <div class="flex items-center gap-4 px-5 py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
-                                    <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 <?= F::deviceKindBadgeClass((string) $orphan['device_kind']) ?>">
-                                        <?= F::e(F::deviceKindLabel((string) $orphan['device_kind'])) ?>
-                                    </span>
-                                    <div class="flex-1 min-w-0">
-                                        <a class="font-medium text-slate-800 hover:text-sky-700 hover:underline text-sm"
-                                            href="/device.php?id=<?= F::e($orphan['id']) ?>">
-                                            <?= F::nullable($orphan['name'] ?? null) ?>
+                        <?php
+                        $movedBalizas = $historicalBalizas[$bridgeId] ?? [];
+                        ?>
+
+                        <?php foreach ($movedBalizas as $moved): ?>
+                            <div class="flex items-center gap-4 px-5 py-3 border-b border-slate-100 last:border-0
+                                bg-slate-50/50 opacity-75">
+
+                                <!-- Conector visual con estilo diferente -->
+                                <div class="flex-shrink-0 flex items-center gap-1 ml-7">
+                                    <div class="w-px h-4 bg-slate-200"></div>
+                                    <div class="w-3 h-px bg-slate-200"></div>
+                                </div>
+
+                                <!-- Badge atenuado -->
+                                <span class="inline-flex flex-shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ring-1
+                                     bg-slate-100 text-slate-400 ring-slate-200">
+                                    Baliza
+                                </span>
+
+                                <!-- Nombre + badge "movida" -->
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <a class="font-medium text-slate-500 hover:text-sky-700 hover:underline
+                                          transition-colors text-sm"
+                                            href="/device.php?id=<?= F::e($moved['baliza_id']) ?>">
+                                            <?= F::nullable($moved['baliza_name']) ?>
+                                            <?php if (($moved['baliza_external_id'] ?? '') !== ''): ?>
+                                                <span class="ml-1 font-normal text-slate-400">
+                                                    · <?= F::e($moved['baliza_external_id']) ?>
+                                                </span>
+                                            <?php endif; ?>
                                         </a>
-                                        <div class="mt-0.5 text-xs text-slate-500 font-mono">
-                                            <?= F::nullable($orphan['mac_address'] ?? null) ?>
-                                        </div>
+
+                                        <!-- Indicador de bridge actual -->
+                                        <a href="/device.php?id=<?= F::e($moved['current_bridge_id']) ?>"
+                                            class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5
+                                          text-xs font-medium text-amber-700 ring-1 ring-amber-200
+                                          hover:bg-amber-100 transition-colors">
+                                            <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                                            </svg>
+                                            <?= F::e($moved['current_bridge_name']) ?>
+                                            <?php if (($moved['current_bridge_external_id'] ?? '') !== ''): ?>
+                                                · <?= F::e($moved['current_bridge_external_id']) ?>
+                                            <?php endif; ?>
+                                        </a>
                                     </div>
-                                    <div class="flex items-center gap-6 text-sm flex-shrink-0">
-                                        <div class="text-center">
-                                            <div class="font-semibold text-slate-700"><?= F::number($oEvents) ?></div>
-                                            <div class="text-xs text-slate-500">eventos</div>
-                                        </div>
-                                        <div class="text-center">
-                                            <div class="font-semibold <?= $oWarns > 0 ? 'text-amber-700' : 'text-slate-400' ?>"><?= F::number($oWarns) ?></div>
-                                            <div class="text-xs text-slate-500">warn</div>
-                                        </div>
-                                        <div class="text-center">
-                                            <div class="font-semibold <?= $oErrors > 0 ? 'text-red-700' : 'text-slate-400' ?>"><?= F::number($oErrors) ?></div>
-                                            <div class="text-xs text-slate-500">error</div>
-                                        </div>
+
+                                    <div class="mt-0.5 text-xs text-slate-400 font-mono">
+                                        <?= F::nullable($moved['baliza_mac']) ?>
                                     </div>
                                 </div>
-                            <?php endforeach; ?>
+
+                                <!-- Contadores de eventos a través de ESTE bridge -->
+                                <div class="flex items-center gap-4 flex-shrink-0">
+                                    <div class="w-16 text-center">
+                                        <div class="font-semibold text-slate-400">
+                                            <?= F::number((int) $moved['event_count']) ?>
+                                        </div>
+                                        <div class="text-xs text-slate-400">eventos</div>
+                                    </div>
+                                    <div class="w-12"></div><!-- warn spacer -->
+                                    <div class="w-12"></div><!-- error spacer -->
+                                    <div class="w-14"></div><!-- balizas spacer -->
+                                    <div class="w-40 text-right text-xs text-slate-400 hidden lg:block">
+                                        <div>Último evento aquí</div>
+                                        <div class="font-medium"><?= F::datetime($moved['last_event_at']) ?></div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                    <?php endif; ?>
-
-                </section>
-
             </div>
+        <?php endforeach; ?>
 
+        <!-- Balizas huérfanas (sin bridge padre conocido) -->
+        <?php if (!empty($orphans)): ?>
+            <div class="overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm">
+                <div class="flex items-center gap-3 px-5 py-3 bg-amber-50 border-b border-amber-200">
+                    <span class="text-sm font-medium text-amber-800">Sin bridge asignado</span>
+                    <span class="text-xs text-amber-600"><?= count($orphans) ?> dispositivo(s)</span>
+                </div>
+                <?php foreach ($orphans as $orphan): ?>
+                    <?php
+                    $oEvents = (int) ($orphan['event_count'] ?? 0);
+                    $oWarns  = (int) ($orphan['warn_count'] ?? 0);
+                    $oErrors = (int) ($orphan['error_count'] ?? 0) + (int) ($orphan['critical_count'] ?? 0);
+                    ?>
+                    <div class="flex items-center gap-4 px-5 py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
+                        <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 <?= F::deviceKindBadgeClass((string) $orphan['device_kind']) ?>">
+                            <?= F::e(F::deviceKindLabel((string) $orphan['device_kind'])) ?>
+                        </span>
+                        <div class="flex-1 min-w-0">
+                            <a class="font-medium text-slate-800 hover:text-sky-700 hover:underline text-sm"
+                                href="/device.php?id=<?= F::e($orphan['id']) ?>">
+                                <?= F::nullable($orphan['name'] ?? null) ?>
+                            </a>
+                            <div class="mt-0.5 text-xs text-slate-500 font-mono">
+                                <?= F::nullable($orphan['mac_address'] ?? null) ?>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-6 text-sm flex-shrink-0">
+                            <div class="text-center">
+                                <div class="font-semibold text-slate-700"><?= F::number($oEvents) ?></div>
+                                <div class="text-xs text-slate-500">eventos</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="font-semibold <?= $oWarns > 0 ? 'text-amber-700' : 'text-slate-400' ?>"><?= F::number($oWarns) ?></div>
+                                <div class="text-xs text-slate-500">warn</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="font-semibold <?= $oErrors > 0 ? 'text-red-700' : 'text-slate-400' ?>"><?= F::number($oErrors) ?></div>
+                                <div class="text-xs text-slate-500">error</div>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
         <?php endif; ?>
+
+        </section>
+
+        </div>
+
+    <?php endif; ?>
     </main>
 </body>
 
