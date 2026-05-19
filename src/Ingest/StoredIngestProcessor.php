@@ -16,6 +16,8 @@ use Throwable;
 final class StoredIngestProcessor
 {
     private readonly string $storageBasePath;
+    private const ZOMBIE_TIMEOUT_MINUTES = 10;
+
 
     public function __construct(
         private readonly PDO $pdo,
@@ -67,6 +69,41 @@ final class StoredIngestProcessor
         return (int) $stmt->fetchColumn();
     }
 
+    public function countZombies(): int
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT COUNT(*) AS total
+               FROM log_ingests
+              WHERE status = :status
+                AND processing_started_at < DATE_SUB(NOW(), INTERVAL :minutes MINUTE)'
+        );
+
+        $stmt->bindValue('status', 'parsing');
+        $stmt->bindValue('minutes', self::ZOMBIE_TIMEOUT_MINUTES, PDO::PARAM_INT);
+        $stmt->execute();
+
+        return (int) $stmt->fetchColumn();
+    }
+
+    public function rescueZombies(): int
+    {
+        $stmt = $this->pdo->prepare(
+            'UPDATE log_ingests
+                SET status                 = :new_status,
+                    processing_started_at  = NULL,
+                    processing_finished_at = NULL
+              WHERE status = :parsing_status
+                AND processing_started_at < DATE_SUB(NOW(), INTERVAL :minutes MINUTE)'
+        );
+
+        $stmt->bindValue('new_status', 'received');
+        $stmt->bindValue('parsing_status', 'parsing');
+        $stmt->bindValue('minutes', self::ZOMBIE_TIMEOUT_MINUTES, PDO::PARAM_INT);
+        $stmt->execute();
+
+        return (int) $stmt->rowCount();
+    }
+
     public function getIngest(int $ingestId): ?array
     {
         $stmt = $this->pdo->prepare(
@@ -88,10 +125,13 @@ final class StoredIngestProcessor
 
     public function processBatch(int $limit = 50, bool $retryErrors = false): array
     {
+        $rescued = $this->rescueZombies();
+
         $candidates = $this->listCandidates($limit, $retryErrors);
 
         $summary = [
             'total_candidates' => count($candidates),
+            'rescued_zombies'  => $rescued,
             'processed'        => 0,
             'failed'           => 0,
             'skipped'          => 0,

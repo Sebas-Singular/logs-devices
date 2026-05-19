@@ -91,16 +91,17 @@ try {
     );
 
     JsonResponse::send([
-        'ok' => $summary['failed'] === 0,
-        'mode' => 'batch',
-        'limit' => $limit,
-        'retry_errors' => $retryErrors,
-        'processed' => $summary['processed'],
-        'failed' => $summary['failed'],
-        'skipped' => $summary['skipped'],
+        'ok'              => $summary['failed'] === 0,
+        'mode'            => 'batch',
+        'limit'           => $limit,
+        'retry_errors'    => $retryErrors,
+        'rescued_zombies' => $summary['rescued_zombies'],
+        'processed'       => $summary['processed'],
+        'failed'          => $summary['failed'],
+        'skipped'         => $summary['skipped'],
         'total_candidates' => $summary['total_candidates'],
-        'remaining' => $processor->countCandidates($retryErrors),
-        'results' => $summary['results'],
+        'remaining'       => $processor->countCandidates($retryErrors),
+        'results'         => $summary['results'],
     ]);
 } catch (Throwable $exception) {
     JsonResponse::send([

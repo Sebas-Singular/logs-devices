@@ -15,9 +15,9 @@ SecurityHeaders::applyJson();
 
 Bootstrap::init();
 
-$appEnv = (string) Env::get('APP_ENV', 'unknown');
-$mode = strtolower(trim((string) ($_GET['mode'] ?? 'public')));
-$fullModeRequested = $mode === 'full';
+$appEnv             = (string) Env::get('APP_ENV', 'unknown');
+$mode               = strtolower(trim((string) ($_GET['mode'] ?? 'public')));
+$fullModeRequested  = $mode === 'full';
 
 if ($fullModeRequested) {
     enforceFullHealthAuth();
@@ -26,26 +26,28 @@ if ($fullModeRequested) {
 $storageBaseDir = rtrim(Paths::for(''), '/\\');
 
 $databaseCheck = [
-    'ok' => false,
+    'ok'      => false,
     'message' => 'Database check failed.',
 ];
 
 try {
-    $pdo = Connection::make();
+    $pdo           = Connection::make();
     $databaseCheck = HealthReporter::database($pdo);
 } catch (Throwable $exception) {
     if ($fullModeRequested && $appEnv !== 'production') {
-        $databaseCheck['error_class'] = $exception::class;
+        $databaseCheck['error_class']   = $exception::class;
         $databaseCheck['error_message'] = $exception->getMessage();
     }
 }
 
-$storageCheck = HealthReporter::storage($storageBaseDir);
+$storageCheck    = HealthReporter::storage($storageBaseDir);
+$extensionsCheck = HealthReporter::extensions();
 
 $criticalStorageOk = ($storageCheck['raw']['ok'] ?? false)
     && ($storageCheck['rejected']['ok'] ?? false);
 
-$warnings = [];
+$warnings    = [];
+$zombieCount = (int) ($databaseCheck['parsing_zombie_count'] ?? 0);
 
 if (($storageCheck['archive']['ok'] ?? false) === false) {
     $warnings[] = 'storage_archive_not_ready';
@@ -55,26 +57,38 @@ if (($storageCheck['rate_limit']['ok'] ?? false) === false) {
     $warnings[] = 'storage_rate_limit_not_ready';
 }
 
+if ($zombieCount > 0) {
+    $warnings[] = 'parsing_zombies_detected';
+}
+
+if (($extensionsCheck['forward_method'] ?? 'none') === 'none') {
+    $warnings[] = 'forward_unavailable';
+}
+
 $databaseOk = (bool) ($databaseCheck['ok'] ?? false);
-$ok = $databaseOk && $criticalStorageOk;
+$ok         = $databaseOk && $criticalStorageOk;
 
 http_response_code($ok ? 200 : 503);
 
 if ($fullModeRequested) {
     echo json_encode([
-        'ok' => $ok,
-        'app' => 'logs-devices',
-        'mode' => 'full',
-        'env' => $appEnv,
-        'php' => PHP_VERSION,
+        'ok'      => $ok,
+        'app'     => 'logs-devices',
+        'mode'    => 'full',
+        'env'     => $appEnv,
+        'php'     => PHP_VERSION,
 
-        'database' => $databaseOk ? 'ok' : 'error',
+        'database'      => $databaseOk ? 'ok' : 'error',
         'database_name' => $databaseCheck['database_name'] ?? null,
         'database_time' => $databaseCheck['database_time'] ?? null,
 
+        'parsing_zombie_count' => $zombieCount,
+        'forward_method'       => $extensionsCheck['forward_method'],
+
         'checks' => [
-            'database' => $databaseCheck,
-            'storage' => $storageCheck,
+            'database'   => $databaseCheck,
+            'storage'    => $storageCheck,
+            'extensions' => $extensionsCheck,
         ],
         'warnings' => $warnings,
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
@@ -83,15 +97,19 @@ if ($fullModeRequested) {
 }
 
 echo json_encode([
-    'ok' => $ok,
+    'ok'  => $ok,
     'app' => 'logs-devices',
     'mode' => 'public',
-    'env' => $appEnv,
+    'env'  => $appEnv,
 
     'database' => $databaseOk ? 'ok' : 'error',
-    'storage' => $criticalStorageOk ? 'ok' : 'error',
+    'storage'  => $criticalStorageOk ? 'ok' : 'error',
+
+    'parsing_zombie_count' => $zombieCount,
+    'forward_method'       => $extensionsCheck['forward_method'],
 
     'warnings_count' => count($warnings),
+    'warnings'       => $warnings,
 ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 
 exit;
@@ -105,8 +123,8 @@ function enforceFullHealthAuth(): void
         http_response_code(500);
 
         echo json_encode([
-            'ok' => false,
-            'error' => 'admin_token_not_configured',
+            'ok'      => false,
+            'error'   => 'admin_token_not_configured',
             'message' => 'Admin token is not configured.',
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 
@@ -117,8 +135,8 @@ function enforceFullHealthAuth(): void
         http_response_code(401);
 
         echo json_encode([
-            'ok' => false,
-            'error' => 'invalid_admin_token',
+            'ok'      => false,
+            'error'   => 'invalid_admin_token',
             'message' => 'Invalid admin token.',
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 
