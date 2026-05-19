@@ -65,3 +65,5 @@ private/
 
 # Estado FTP
 .ftp-deploy-sync-state.json
+
+test-*.json
