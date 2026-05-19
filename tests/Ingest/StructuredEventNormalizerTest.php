@@ -171,4 +171,67 @@ final class StructuredEventNormalizerTest extends TestCase
         $this->assertSame(123, $measurements['newMetric']);
         $this->assertSame('kept in extra', $context['extra']['unexpectedField']);
     }
+
+    public function testNormalizeEventWithUnixTimestampEventTs(): void
+    {
+        $normalizer = new StructuredEventNormalizer();
+        $unixTs     = 1747500000; // 2025-05-17 ~18:00 UTC
+
+        $result = $normalizer->normalizeEvents(
+            events: [[
+                'category' => 'telemetry',
+                'type'     => 'telemetry_snapshot',
+                'level'    => 'info',
+                'eventTs'  => $unixTs,
+                'deviceMac' => null,
+                'metrics'  => [],
+            ]],
+            ingestId: 1,
+            bridgeDeviceId: 1,
+            receivedAt: new \DateTimeImmutable('2026-05-19 10:00:00'),
+        );
+
+        $this->assertSame(1, $result['parsed_ok']);
+        $this->assertSame(0, $result['parsed_error']);
+
+        $event = $result['events'][0];
+
+        // El timestamp debe ser 2025, no un año absurdo
+        $this->assertStringStartsWith('2025-', $event['event_timestamp']);
+
+        // No debe marcarse como fallback porque eventTs era válido
+        $context = json_decode($event['context'], true);
+        $this->assertFalse($context['timeFallback']);
+        $this->assertSame('eventTs', $context['timestampSource']);
+    }
+
+    public function testNormalizeEventWithUnixTimestampTsFallback(): void
+    {
+        $normalizer = new StructuredEventNormalizer();
+        $unixTs     = 1747500000;
+
+        $result = $normalizer->normalizeEvents(
+            events: [[
+                'category'  => 'telemetry',
+                'type'      => 'telemetry_snapshot',
+                'level'     => 'info',
+                'eventTs'   => 'UNSYNCED',
+                'ts'        => $unixTs,
+                'deviceMac' => null,
+                'metrics'   => [],
+            ]],
+            ingestId: 1,
+            bridgeDeviceId: 1,
+            receivedAt: new \DateTimeImmutable('2026-05-19 10:00:00'),
+        );
+
+        $this->assertSame(1, $result['parsed_ok']);
+
+        $event   = $result['events'][0];
+        $context = json_decode($event['context'], true);
+
+        $this->assertStringStartsWith('2025-', $event['event_timestamp']);
+        $this->assertTrue($context['timeFallback']);   // ts es fallback
+        $this->assertSame('ts', $context['timestampSource']);
+    }
 }

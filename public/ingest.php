@@ -27,7 +27,6 @@ if (!in_array($method, ['GET', 'HEAD'], true)) {
 Bootstrap::init();
 
 SecurityHeaders::applyViewer();
-applyIngestRateLimit();
 
 ViewerAuth::enforce();
 

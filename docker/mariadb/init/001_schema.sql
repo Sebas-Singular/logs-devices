@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS log_ingests (
   remote_addr VARCHAR(45) NOT NULL,
   user_agent VARCHAR(255) NOT NULL,
 
-  source_type VARCHAR(30) NOT NULL,
+  source_type VARCHAR(50) NOT NULL,
 
   source_device_id BIGINT UNSIGNED NULL,
   bridge_id_reported VARCHAR(50) NULL,

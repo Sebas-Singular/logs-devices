@@ -47,6 +47,16 @@ return [
     'INGEST_RATE_LIMIT_MAX'             => '1000',
     'INGEST_RATE_LIMIT_WINDOW_SECONDS'  => '600',
 
+    // ===== Viewer — sesión =====
     // Tiempo en segundos de inactividad antes de cerrar la sesión del visor.
     'VIEWER_SESSION_LIFETIME' => '1800',
+
+    // ===== Endpoint legacy — forward =====
+    // Desactivar solo para mantenimiento o debug. En producción debe ser 'true'.
+    'LEGACY_FORWARD_ENABLED' => 'true',
+
+    // ===== Storage =====
+    // Ruta absoluta base para NDJSON, rate-limit y sesiones.
+    // Si se omite, Bootstrap usa {project_root}/storage como fallback.
+    // 'STORAGE_BASE_PATH' => '/ruta/absoluta/storage',
 ];

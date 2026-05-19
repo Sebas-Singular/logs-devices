@@ -270,6 +270,14 @@ final class StructuredEventNormalizer
             return null;
         }
 
+        if (ctype_digit($text) && strlen($text) >= 9 && strlen($text) <= 11) {
+            try {
+                return new DateTimeImmutable('@' . $text);
+            } catch (Throwable) {
+                return null;
+            }
+        }
+
         foreach (['Y-m-d H:i:s.u', 'Y-m-d H:i:s.v', 'Y-m-d H:i:s'] as $format) {
             $date = DateTimeImmutable::createFromFormat($format, $text);
 
@@ -284,7 +292,6 @@ final class StructuredEventNormalizer
             return null;
         }
     }
-
     private function safeIdentifier(mixed $value, string $default): string
     {
         if (!is_scalar($value)) {
