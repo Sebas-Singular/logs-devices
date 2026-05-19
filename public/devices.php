@@ -116,7 +116,7 @@ foreach ($devices as $device) {
 
             <div
                 x-data="{
-                view: localStorage.getItem('ld_devices_view') || 'list',
+                view: localStorage.getItem('ld_devices_view') || 'tree',
                 open: {},
                 setView(v) {
                     this.view = v;
@@ -211,7 +211,6 @@ foreach ($devices as $device) {
                                                     <?= F::nullable($device['name'] ?? null) ?>
                                                 </a>
                                             </div>
-                                            <div class="mt-1 text-xs text-slate-500">ID interno: <?= F::e($device['id']) ?></div>
                                         </td>
                                         <td class="whitespace-nowrap px-4 py-3 font-mono text-xs">
                                             <?= F::nullable($device['external_id'] ?? null) ?>
@@ -287,9 +286,9 @@ foreach ($devices as $device) {
                                 <!-- Toggle expand -->
                                 <button
                                     @click="
-                                    toggleBridge(<?= $bridgeId ?>);
-                                    localStorage.setItem('ld_bridge_open_<?= $bridgeId ?>', isOpen(<?= $bridgeId ?>));
-                                "
+                                        toggleBridge(<?= $bridgeId ?>);
+                                        localStorage.setItem('ld_bridge_open_<?= $bridgeId ?>', isOpen(<?= $bridgeId ?>));
+                                    "
                                     class="flex-shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition-colors"
                                     :title="isOpen(<?= $bridgeId ?>) ? 'Colapsar' : 'Expandir'">
                                     <svg class="h-4 w-4 transition-transform duration-200"
@@ -304,43 +303,36 @@ foreach ($devices as $device) {
                                     Bridge
                                 </span>
 
-                                <!-- Nombre y ID -->
+                                <!-- Nombre · External ID -->
                                 <div class="flex-1 min-w-0">
                                     <a class="font-semibold text-slate-900 hover:text-sky-700 hover:underline transition-colors"
                                         href="/device.php?id=<?= F::e($bridge['id']) ?>">
                                         <?= F::nullable($bridge['name'] ?? null) ?>
-                                    </a>
-                                    <div class="mt-0.5 text-xs text-slate-500">
-                                        ID interno: <?= F::e($bridge['id']) ?>
                                         <?php if (($bridge['external_id'] ?? '') !== ''): ?>
-                                            · External: <?= F::e($bridge['external_id']) ?>
+                                            <span class="ml-1.5 font-normal text-slate-500">· <?= F::e($bridge['external_id']) ?></span>
                                         <?php endif; ?>
-                                    </div>
+                                    </a>
                                 </div>
 
-                                <!-- Contadores del bridge -->
-                                <div class="flex items-center gap-6 text-sm flex-shrink-0">
-                                    <div class="text-center">
+                                <!-- Contadores (anchos fijos para alineación con balizas) -->
+                                <div class="flex items-center gap-4 flex-shrink-0">
+                                    <div class="w-16 text-center">
                                         <div class="font-bold text-slate-800"><?= F::number($bEvents) ?></div>
                                         <div class="text-xs text-slate-500">eventos</div>
                                     </div>
-                                    <div class="text-center">
-                                        <div class="font-bold <?= $bWarns > 0 ? 'text-amber-700' : 'text-slate-400' ?>">
-                                            <?= F::number($bWarns) ?>
-                                        </div>
+                                    <div class="w-12 text-center">
+                                        <div class="font-bold <?= $bWarns > 0 ? 'text-amber-700' : 'text-slate-400' ?>"><?= F::number($bWarns) ?></div>
                                         <div class="text-xs text-slate-500">warn</div>
                                     </div>
-                                    <div class="text-center">
-                                        <div class="font-bold <?= $bErrors > 0 ? 'text-red-700' : 'text-slate-400' ?>">
-                                            <?= F::number($bErrors) ?>
-                                        </div>
+                                    <div class="w-12 text-center">
+                                        <div class="font-bold <?= $bErrors > 0 ? 'text-red-700' : 'text-slate-400' ?>"><?= F::number($bErrors) ?></div>
                                         <div class="text-xs text-slate-500">error</div>
                                     </div>
-                                    <div class="text-center">
+                                    <div class="w-14 text-center">
                                         <div class="font-semibold text-slate-700"><?= F::number($childCount) ?></div>
                                         <div class="text-xs text-slate-500">balizas</div>
                                     </div>
-                                    <div class="text-right text-xs text-slate-500 hidden lg:block">
+                                    <div class="w-40 text-right text-xs text-slate-500 hidden lg:block">
                                         <div>Último evento</div>
                                         <div class="font-medium text-slate-700"><?= F::datetime($bridge['last_event_at'] ?? null) ?></div>
                                     </div>
@@ -354,7 +346,7 @@ foreach ($devices as $device) {
                                 x-transition:enter-end="opacity-100 translate-y-0">
 
                                 <?php if (empty($children)): ?>
-                                    <div class="flex items-center gap-3 px-5 py-3 text-sm text-slate-400 border-b border-slate-100 last:border-0">
+                                    <div class="px-5 py-3 text-sm text-slate-400 border-b border-slate-100">
                                         <span class="ml-9">Sin balizas asociadas</span>
                                     </div>
                                 <?php endif; ?>
@@ -367,7 +359,7 @@ foreach ($devices as $device) {
                                     ?>
                                     <div class="flex items-center gap-4 px-5 py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
 
-                                        <!-- Conector visual de árbol -->
+                                        <!-- Conector visual -->
                                         <div class="flex-shrink-0 flex items-center gap-1 ml-7">
                                             <div class="w-px h-4 bg-slate-300"></div>
                                             <div class="w-3 h-px bg-slate-300"></div>
@@ -378,40 +370,36 @@ foreach ($devices as $device) {
                                             Baliza
                                         </span>
 
-                                        <!-- Nombre, MAC e ID -->
+                                        <!-- Nombre · External ID · MAC -->
                                         <div class="flex-1 min-w-0">
                                             <a class="font-medium text-slate-800 hover:text-sky-700 hover:underline transition-colors text-sm"
                                                 href="/device.php?id=<?= F::e($baliza['id']) ?>">
                                                 <?= F::nullable($baliza['name'] ?? null) ?>
+                                                <?php if (($baliza['external_id'] ?? '') !== ''): ?>
+                                                    <span class="ml-1.5 font-normal text-slate-500">· <?= F::e($baliza['external_id']) ?></span>
+                                                <?php endif; ?>
                                             </a>
                                             <div class="mt-0.5 text-xs text-slate-500 font-mono">
                                                 <?= F::nullable($baliza['mac_address'] ?? null) ?>
-                                                <?php if (($baliza['external_id'] ?? '') !== ''): ?>
-                                                    · ID: <?= F::e($baliza['external_id']) ?>
-                                                <?php endif; ?>
                                             </div>
                                         </div>
 
-                                        <!-- Contadores de la baliza -->
-                                        <div class="flex items-center gap-6 text-sm flex-shrink-0">
-                                            <div class="text-center">
+                                        <!-- Contadores (mismos anchos que bridge para alineación) -->
+                                        <div class="flex items-center gap-4 flex-shrink-0">
+                                            <div class="w-16 text-center">
                                                 <div class="font-semibold text-slate-700"><?= F::number($nEvents) ?></div>
                                                 <div class="text-xs text-slate-500">eventos</div>
                                             </div>
-                                            <div class="text-center">
-                                                <div class="font-semibold <?= $nWarns > 0 ? 'text-amber-700' : 'text-slate-400' ?>">
-                                                    <?= F::number($nWarns) ?>
-                                                </div>
+                                            <div class="w-12 text-center">
+                                                <div class="font-semibold <?= $nWarns > 0 ? 'text-amber-700' : 'text-slate-400' ?>"><?= F::number($nWarns) ?></div>
                                                 <div class="text-xs text-slate-500">warn</div>
                                             </div>
-                                            <div class="text-center">
-                                                <div class="font-semibold <?= $nErrors > 0 ? 'text-red-700' : 'text-slate-400' ?>">
-                                                    <?= F::number($nErrors) ?>
-                                                </div>
+                                            <div class="w-12 text-center">
+                                                <div class="font-semibold <?= $nErrors > 0 ? 'text-red-700' : 'text-slate-400' ?>"><?= F::number($nErrors) ?></div>
                                                 <div class="text-xs text-slate-500">error</div>
                                             </div>
-                                            <div class="text-center w-16"></div><!-- spacer alineación -->
-                                            <div class="text-right text-xs text-slate-500 hidden lg:block">
+                                            <div class="w-14"></div><!-- spacer columna "balizas" -->
+                                            <div class="w-40 text-right text-xs text-slate-500 hidden lg:block">
                                                 <div>Último evento</div>
                                                 <div class="font-medium text-slate-700"><?= F::datetime($baliza['last_event_at'] ?? null) ?></div>
                                             </div>

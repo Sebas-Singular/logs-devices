@@ -152,7 +152,7 @@ $severityOrder = ['critical', 'error', 'warn', 'info', 'unknown'];
                         </div>
 
                         <div class="text-right text-xs text-slate-500">
-                            ID interno<br>
+                            Nº de Registro<br>
                             <span class="font-mono text-slate-700"><?= F::e($device['id']) ?></span>
                         </div>
                     </div>

@@ -8,55 +8,33 @@ use DateTimeImmutable;
 use PDO;
 use PDOException;
 
-// =============================================================================
-// DeviceResolver.php — Resuelve o crea dispositivos en la tabla devices
-// =============================================================================
-//
-// Dos métodos públicos:
-//   resolveOrCreateBridge() → para el bridge que envía el POST
-//   resolveOrCreateBeacon() → para cada baliza mencionada en las líneas
-//
-// Ambos siguen el mismo patrón:
-//   1. SELECT para buscar el dispositivo existente
-//   2. UPDATE last_seen_at si se encontró
-//   3. INSERT si no existe (con try/catch por si hay race condition)
-//   4. Devolver el id del dispositivo (nuevo o existente)
-//
-// El método NO decide si fusionar dispositivos sospechosos de ser el mismo
-// hardware reemplazado. Esa decisión es manual (fase 6).
-// =============================================================================
-
 final class DeviceResolver
 {
-    public function __construct(private readonly PDO $pdo)
-    {
-        // Inyectamos la conexión en lugar de crearla aquí porque:
-        // - ingest.php ya tiene una conexión abierta: la reutilizamos
-        // - los tests pueden inyectar una conexión de test
-    }
+    public function __construct(private readonly PDO $pdo) {}
 
     // -------------------------------------------------------------------------
     // resolveOrCreateBridge
     // -------------------------------------------------------------------------
-    // Busca un bridge por external_id (= bridgeId del payload).
-    // Si no existe lo crea. Siempre actualiza last_seen_at.
+    // Nuevos parámetros opcionales:
+    //   $mac             → MAC del bridge (source.bridgeMac del payload)
+    //   $firmwareVersion → versión de firmware reportada
+    //   $serialNumber    → número de serie reportado
     //
-    // Parámetros:
-    //   $bridgeIdReported → el bridgeId del payload: '11', '115', '120'
-    //   $bridgeName       → el bridgeName del payload (puede ser '')
-    //   $seenAt           → timestamp de recepción del POST
-    //
-    // Retorna el id (BIGINT) del bridge en la tabla devices.
+    // Si el bridge ya existe y le faltaba MAC/firmware/serial, se actualiza.
+    // NUNCA sobreescribe una MAC ya existente (solo rellena si era null).
     // -------------------------------------------------------------------------
     public function resolveOrCreateBridge(
         string $bridgeIdReported,
         string $bridgeName,
-        DateTimeImmutable $seenAt
+        DateTimeImmutable $seenAt,
+        ?string $mac = null,
+        ?string $firmwareVersion = null,
+        ?string $serialNumber = null,
     ): int {
         $seenAtSql = $seenAt->format('Y-m-d H:i:s');
 
         $stmt = $this->pdo->prepare(
-            'SELECT id
+            'SELECT id, name, name_origin, mac_address, metadata
                FROM devices
               WHERE device_kind = :kind
                 AND external_id = :external_id
@@ -71,45 +49,62 @@ final class DeviceResolver
         $existing = $stmt->fetch();
 
         if ($existing !== false) {
-            $this->updateLastSeenAt((int) $existing['id'], $seenAtSql);
-            return (int) $existing['id'];
+            $deviceId = (int) $existing['id'];
+
+            $this->updateLastSeenAt($deviceId, $seenAtSql);
+
+            // Rellenar MAC si el bridge no la tenía y ahora la tenemos
+            if (
+                $mac !== null
+                && $mac !== ''
+                && ($existing['mac_address'] === null || $existing['mac_address'] === '')
+            ) {
+                $this->updateBridgeMac($deviceId, $mac);
+            }
+
+            // Actualizar nombre si cambió y el origen es 'reported'
+            if (
+                $bridgeName !== ''
+                && $bridgeName !== $existing['name']
+                && $existing['name_origin'] === 'reported'
+            ) {
+                $this->updateName($deviceId, $bridgeName);
+            }
+
+            // Actualizar firmware/serial en metadata si vienen en el payload
+            if ($firmwareVersion !== null || $serialNumber !== null) {
+                $this->updateBridgeMetadata(
+                    $deviceId,
+                    (string) $existing['metadata'],
+                    $firmwareVersion,
+                    $serialNumber
+                );
+            }
+
+            return $deviceId;
         }
 
         $name = $bridgeName !== ''
             ? $bridgeName
             : 'Bridge ' . $bridgeIdReported;
 
+        $metadata = $this->buildInitialMetadata($firmwareVersion, $serialNumber);
+
         return $this->insertDevice([
             'device_kind'      => 'bridge',
-            'mac_address'      => null,   
+            'mac_address'      => ($mac !== null && $mac !== '') ? $mac : null,
             'external_id'      => $bridgeIdReported,
             'name'             => $name,
             'name_origin'      => 'reported',
             'parent_device_id' => null,
             'first_seen_at'    => $seenAtSql,
             'last_seen_at'     => $seenAtSql,
+            'metadata'         => $metadata,
         ]);
     }
 
     // -------------------------------------------------------------------------
-    // resolveOrCreateBeacon
-    // -------------------------------------------------------------------------
-    // Busca una baliza en este orden de prioridad:
-    //   1. Por mac_address (clave natural más fiable)
-    //   2. Por external_id + parent_device_id (fallback si no hay MAC)
-    //
-    // Si no existe la crea. Siempre actualiza last_seen_at.
-    // Si la baliza existía pero el nombre cambió y el origen era 'reported',
-    // actualiza el nombre (los nombres de balizas pueden cambiar en el firmware).
-    //
-    // Parámetros:
-    //   $mac            → MAC normalizada a lowercase: '34:85:18:46:e3:1c'
-    //   $externalId     → id=NN del body TELEMETRY: '01', '03' (puede ser null)
-    //   $name           → name='...' del body TELEMETRY (puede ser null)
-    //   $bridgeDeviceId → id del bridge padre en devices (ya resuelto)
-    //   $seenAt         → timestamp del evento (firmware o received como fallback)
-    //
-    // Retorna el id (BIGINT) de la baliza en la tabla devices.
+    // resolveOrCreateBeacon — sin cambios de lógica
     // -------------------------------------------------------------------------
     public function resolveOrCreateBeacon(
         string $mac,
@@ -173,10 +168,7 @@ final class DeviceResolver
               LIMIT 1'
         );
 
-        $stmt->execute([
-            'kind' => 'baliza',
-            'mac'  => $mac,
-        ]);
+        $stmt->execute(['kind' => 'baliza', 'mac' => $mac]);
 
         return $stmt->fetch();
     }
@@ -189,9 +181,9 @@ final class DeviceResolver
         $stmt = $this->pdo->prepare(
             'SELECT id, name, name_origin
                FROM devices
-              WHERE device_kind        = :kind
-                AND parent_device_id   = :parent_id
-                AND external_id       IN (:raw, :normalized, :padded)
+              WHERE device_kind      = :kind
+                AND parent_device_id = :parent_id
+                AND external_id     IN (:raw, :normalized, :padded)
               LIMIT 1'
         );
 
@@ -212,7 +204,7 @@ final class DeviceResolver
             'UPDATE devices
                 SET last_seen_at = :last_seen_at,
                     updated_at   = :updated_at
-            WHERE id = :id'
+              WHERE id = :id'
         );
 
         $stmt->execute([
@@ -239,18 +231,95 @@ final class DeviceResolver
         ]);
     }
 
-    // -------------------------------------------------------------------------
-    // insertDevice
-    // -------------------------------------------------------------------------
-    // Inserta un nuevo dispositivo y devuelve su id.
-    // Si hay una colisión en mac_address (race condition entre dos requests
-    // concurrentes del mismo bridge), captura el error y hace SELECT para
-    // devolver el id del registro que ganó la carrera.
-    // -------------------------------------------------------------------------
+    /**
+     * Rellena la MAC de un bridge solo si actualmente es NULL.
+     * Nunca sobreescribe una MAC existente.
+     */
+    private function updateBridgeMac(int $deviceId, string $mac): void
+    {
+        $stmt = $this->pdo->prepare(
+            'UPDATE devices
+                SET mac_address = :mac,
+                    updated_at  = NOW()
+              WHERE id          = :id
+                AND mac_address IS NULL'
+        );
+
+        $stmt->execute(['mac' => $mac, 'id' => $deviceId]);
+    }
+
+    /**
+     * Actualiza firmware_version y/o serial_number en el JSON de metadata.
+     * Hace merge con los valores existentes; nunca borra claves ya presentes.
+     * Solo escribe si hay algún cambio real.
+     */
+    private function updateBridgeMetadata(
+        int $deviceId,
+        string $currentMetadataRaw,
+        ?string $firmwareVersion,
+        ?string $serialNumber
+    ): void {
+        $meta = [];
+
+        if ($currentMetadataRaw !== '' && $currentMetadataRaw !== 'null') {
+            $decoded = json_decode($currentMetadataRaw, true);
+            if (is_array($decoded)) {
+                $meta = $decoded;
+            }
+        }
+
+        $changed = false;
+
+        if ($firmwareVersion !== null && $firmwareVersion !== '') {
+            if (($meta['firmware_version'] ?? null) !== $firmwareVersion) {
+                $meta['firmware_version'] = $firmwareVersion;
+                $changed = true;
+            }
+        }
+
+        if ($serialNumber !== null && $serialNumber !== '') {
+            if (($meta['serial_number'] ?? null) !== $serialNumber) {
+                $meta['serial_number'] = $serialNumber;
+                $changed = true;
+            }
+        }
+
+        if (!$changed) {
+            return;
+        }
+
+        $stmt = $this->pdo->prepare(
+            'UPDATE devices
+                SET metadata   = :metadata,
+                    updated_at = NOW()
+              WHERE id = :id'
+        );
+
+        $stmt->execute([
+            'metadata' => json_encode($meta, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'id'       => $deviceId,
+        ]);
+    }
+
+    private function buildInitialMetadata(
+        ?string $firmwareVersion,
+        ?string $serialNumber
+    ): ?string {
+        $meta = array_filter([
+            'firmware_version' => ($firmwareVersion !== null && $firmwareVersion !== '') ? $firmwareVersion : null,
+            'serial_number'    => ($serialNumber !== null && $serialNumber !== '') ? $serialNumber : null,
+        ]);
+
+        return $meta !== [] ? json_encode($meta, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null;
+    }
+
     private function insertDevice(array $fields): int
     {
         $fields['created_at'] = $fields['first_seen_at'];
-        $fields['updated_at'] = $fields['first_seen_at'];        
+        $fields['updated_at'] = $fields['first_seen_at'];
+
+        $hasMetadata = array_key_exists('metadata', $fields);
+
         try {
             $stmt = $this->pdo->prepare(
                 'INSERT INTO devices (
@@ -264,8 +333,9 @@ final class DeviceResolver
                     last_seen_at,
                     is_active,
                     created_at,
-                    updated_at
-                ) VALUES (
+                    updated_at'
+                    . ($hasMetadata ? ', metadata' : '') .
+                    ') VALUES (
                     :device_kind,
                     :mac_address,
                     :external_id,
@@ -276,8 +346,9 @@ final class DeviceResolver
                     :last_seen_at,
                     1,
                     :created_at,
-                    :updated_at
-                )'
+                    :updated_at'
+                    . ($hasMetadata ? ', :metadata' : '') .
+                    ')'
             );
 
             $stmt->execute($fields);
@@ -323,14 +394,14 @@ final class DeviceResolver
         ) {
             $stmt = $this->pdo->prepare(
                 'SELECT id, name, name_origin
-                FROM devices
-                WHERE device_kind = :kind
-                AND external_id = :external_id
-                LIMIT 1'
+                   FROM devices
+                  WHERE device_kind = :kind
+                    AND external_id = :external_id
+                  LIMIT 1'
             );
 
             $stmt->execute([
-                'kind' => 'bridge',
+                'kind'        => 'bridge',
                 'external_id' => $fields['external_id'],
             ]);
 

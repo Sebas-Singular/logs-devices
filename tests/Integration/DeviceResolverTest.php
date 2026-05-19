@@ -205,4 +205,77 @@ final class DeviceResolverTest extends TestCase
                  OR external_id = '" . self::TEST_BRIDGE_ID . "'"
         );
     }
+
+    public function testResolveOrCreateBridge_existingBridgeWithoutMac_updatesMacWhenProvided(): void
+    {
+        $seenAt = new DateTimeImmutable('2026-05-01 10:00:00');
+
+        // Crear bridge sin MAC
+        $id = $this->resolver->resolveOrCreateBridge(
+            bridgeIdReported: self::TEST_BRIDGE_ID,
+            bridgeName: 'Test Bridge',
+            seenAt: $seenAt,
+        );
+
+        $row = $this->fetchDevice($id);
+        $this->assertNull($row['mac_address']);
+
+        // Segunda llamada con MAC
+        $this->resolver->resolveOrCreateBridge(
+            bridgeIdReported: self::TEST_BRIDGE_ID,
+            bridgeName: 'Test Bridge',
+            seenAt: new DateTimeImmutable('2026-05-01 11:00:00'),
+            mac: self::TEST_MAC_1,
+        );
+
+        $row = $this->fetchDevice($id);
+        $this->assertSame(self::TEST_MAC_1, $row['mac_address']);
+    }
+
+    public function testResolveOrCreateBridge_existingBridgeWithMac_doesNotOverrideMac(): void
+    {
+        $seenAt = new DateTimeImmutable('2026-05-01 10:00:00');
+
+        // Crear bridge con MAC
+        $id = $this->resolver->resolveOrCreateBridge(
+            bridgeIdReported: self::TEST_BRIDGE_ID,
+            bridgeName: 'Test Bridge',
+            seenAt: $seenAt,
+            mac: self::TEST_MAC_1,
+        );
+
+        // Segunda llamada con otra MAC — no debe sobrescribir
+        $this->resolver->resolveOrCreateBridge(
+            bridgeIdReported: self::TEST_BRIDGE_ID,
+            bridgeName: 'Test Bridge',
+            seenAt: new DateTimeImmutable('2026-05-01 11:00:00'),
+            mac: self::TEST_MAC_2,
+        );
+
+        $row = $this->fetchDevice($id);
+        $this->assertSame(self::TEST_MAC_1, $row['mac_address']);
+    }
+
+    public function testResolveOrCreateBridge_updatesFirmwareInMetadata(): void
+    {
+        $seenAt = new DateTimeImmutable('2026-05-01 10:00:00');
+
+        $id = $this->resolver->resolveOrCreateBridge(
+            bridgeIdReported: self::TEST_BRIDGE_ID,
+            bridgeName: 'Test Bridge',
+            seenAt: $seenAt,
+        );
+
+        $this->resolver->resolveOrCreateBridge(
+            bridgeIdReported: self::TEST_BRIDGE_ID,
+            bridgeName: 'Test Bridge',
+            seenAt: new DateTimeImmutable('2026-05-01 11:00:00'),
+            firmwareVersion: '0.11.1',
+        );
+
+        $row  = $this->fetchDevice($id);
+        $meta = json_decode((string) $row['metadata'], true);
+
+        $this->assertSame('0.11.1', $meta['firmware_version'] ?? null);
+    }
 }

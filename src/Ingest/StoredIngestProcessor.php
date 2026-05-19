@@ -227,6 +227,9 @@ final class StoredIngestProcessor
                 bridgeIdReported: $bridgeId,
                 bridgeName: $bridgeName,
                 seenAt: $receivedAt,
+                mac: ($normalizedPayload['source_mac'] ?? '') !== '' ? $normalizedPayload['source_mac'] : null,
+                firmwareVersion: ($normalizedPayload['firmware_version'] ?? '') !== '' ? $normalizedPayload['firmware_version'] : null,
+                serialNumber: ($normalizedPayload['serial_number'] ?? '') !== '' ? $normalizedPayload['serial_number'] : null,
             );
 
             $parseResult = $this->processNormalizedPayload(

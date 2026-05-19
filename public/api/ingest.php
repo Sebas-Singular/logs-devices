@@ -150,8 +150,10 @@ LIMIT 1'
         bridgeIdReported: $bridgeId,
         bridgeName: $bridgeName,
         seenAt: $receivedAt,
+        mac: $normalizedPayload['source_mac'] !== '' ? $normalizedPayload['source_mac'] : null,
+        firmwareVersion: $normalizedPayload['firmware_version'] !== '' ? $normalizedPayload['firmware_version'] : null,
+        serialNumber: $normalizedPayload['serial_number'] !== '' ? $normalizedPayload['serial_number'] : null,
     );
-
     $insertStmt = $pdo->prepare(
         'INSERT INTO log_ingests (
 received_at,
