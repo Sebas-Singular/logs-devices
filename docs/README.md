@@ -181,6 +181,10 @@ Copiar `src/Config/runtime.php.dist` a `src/Config/runtime.php` y rellenar:
 `runtime.php` **no se versiona y no se sube por el workflow de deploy**.
 Cada entorno mantiene su propio fichero.
 
+En producción, `src/Config/runtime.php` debe existir antes de servir la app.
+Si falta, `Bootstrap::init()` no puede cargar la configuración y la aplicación
+entra en error. El deploy por GitHub Actions no lo crea ni lo actualiza.
+
 ---
 
 ## Desarrollo local

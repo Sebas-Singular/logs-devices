@@ -13,7 +13,48 @@ require_once __DIR__ . '/../../vendor/autoload.php';
 
 SecurityHeaders::applyJson();
 
-Bootstrap::init();
+register_shutdown_function(static function (): void {
+    $error = error_get_last();
+
+    if ($error === null) {
+        return;
+    }
+
+    $fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+
+    if (!in_array($error['type'] ?? 0, $fatalTypes, true)) {
+        return;
+    }
+
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
+    }
+
+    echo json_encode([
+        'ok' => false,
+        'app' => 'logs-devices',
+        'mode' => 'public',
+        'error' => 'bootstrap_fatal',
+        'message' => 'Application bootstrap failed.',
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+});
+
+try {
+    Bootstrap::init();
+} catch (Throwable $exception) {
+    http_response_code(500);
+
+    echo json_encode([
+        'ok' => false,
+        'app' => 'logs-devices',
+        'mode' => 'public',
+        'error' => 'bootstrap_failed',
+        'message' => 'Application configuration is not available.',
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+
+    exit;
+}
 
 $appEnv             = (string) Env::get('APP_ENV', 'unknown');
 $mode               = strtolower(trim((string) ($_GET['mode'] ?? 'public')));

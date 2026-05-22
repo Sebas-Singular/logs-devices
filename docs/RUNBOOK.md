@@ -9,6 +9,11 @@ Accesos disponibles:
 - **phpMyAdmin**: acceso web a MariaDB
 - **GitHub Actions**: deploy manual por workflow dispatch
 
+Requisito operativo:
+
+- `src/Config/runtime.php` debe existir en producción y contener las claves mínimas
+  de app, ingesta, base de datos y auth del visor. El workflow FTP no lo sube.
+
 ---
 
 ## Health check
@@ -23,6 +28,10 @@ Respuesta esperada:
 HTTP 200
 { "ok": true, ... }
 ```
+
+Si `runtime.php` falta o queda roto, `api/health.php` debe responder JSON de error
+controlado en vez de un `500` vacío. Eso indica un problema de bootstrap/configuración,
+no necesariamente de base de datos.
 
 ---
 

@@ -12,6 +12,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 use App\Support\Bootstrap;
 
+$bootstrapError = false;
 $method = (string) ($_SERVER['REQUEST_METHOD'] ?? 'GET');
 
 if ($method === 'POST') {
@@ -27,11 +28,16 @@ if (!in_array($method, ['GET', 'HEAD'], true)) {
     exit;
 }
 
-Bootstrap::init();
+$bootstrapErrorMessage = 'La configuración de la aplicación no está disponible en este entorno.';
 
-SecurityHeaders::applyViewer();
-
-ViewerAuth::enforce();
+try {
+    Bootstrap::init();
+    SecurityHeaders::applyViewer();
+    ViewerAuth::enforce();
+} catch (Throwable) {
+    $bootstrapError = true;
+    http_response_code(500);
+}
 
 $loadError = null;
 $stats = [];
@@ -73,7 +79,12 @@ $severityOrder = ['critical', 'error', 'warn', 'info', 'unknown'];
     require __DIR__ . '/_viewer_header.php'; ?>
 
     <main class="mx-auto max-w-7xl px-6 py-8">
-        <?php if ($loadError !== null): ?>
+        <?php if ($bootstrapError): ?>
+            <section class="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-800 shadow-sm">
+                <h2 class="text-lg font-semibold">Error cargando el dashboard</h2>
+                <p class="mt-2 text-sm"><?= F::e($bootstrapErrorMessage) ?></p>
+            </section>
+        <?php elseif ($loadError !== null): ?>
             <section class="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-800 shadow-sm">
                 <h2 class="text-lg font-semibold">Error cargando el dashboard</h2>
                 <p class="mt-2 font-mono text-sm"><?= F::e($loadError) ?></p>
