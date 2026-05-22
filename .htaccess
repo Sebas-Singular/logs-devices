@@ -23,6 +23,7 @@ RewriteRule (^|/)\. - [F,L]
 RewriteRule ^(?:composer\.(?:json|lock)|phpunit\.xml(?:\.dist)?|docker-compose\.ya?ml|README\.md|home\.html)$ - [F,L,NC]
 
 # Rutas públicas del visor (rewrites internos).
+RewriteRule ^Logo-singular\.svg$ public/Logo-singular.svg [L,QSA,NC]
 RewriteRule ^$ public/index.php [L,QSA]
 RewriteRule ^index\.php$ public/index.php [L,QSA]
 RewriteRule ^devices\.php$ public/devices.php [L,QSA]
