@@ -135,7 +135,14 @@ final class ViewerQueries
             ON (
                     (d.device_kind = "bridge" AND le.bridge_device_id = d.id)
                     OR
-                    (d.device_kind <> "bridge" AND le.device_id = d.id)
+                    (
+                        d.device_kind <> "bridge"
+                        AND le.device_id = d.id
+                        AND (
+                            d.parent_device_id IS NULL
+                            OR le.bridge_device_id = d.parent_device_id
+                        )
+                    )
                 )
             GROUP BY
                 d.id,
@@ -505,6 +512,8 @@ final class ViewerQueries
             le.parse_ok,
             le.parse_error,
             le.message_text,
+            le.measurements,
+            le.context,
 
             d.device_kind AS device_kind,
             d.name AS device_name,

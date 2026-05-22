@@ -88,38 +88,8 @@ $severityOrder = ['critical', 'error', 'warn', 'info', 'unknown'];
 </head>
 
 <body class="min-h-screen bg-slate-100 text-slate-900">
-    <header class="border-b border-slate-200 bg-white">
-        <div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
-            <div>
-                <h1 class="text-2xl font-bold tracking-tight">
-                    <?= $device ? F::nullable($device['name'] ?? null) : 'Dispositivo' ?>
-                </h1>
-                <p class="mt-1 text-sm text-slate-500">
-                    Detalle técnico del dispositivo y sus últimos eventos.
-                </p>
-            </div>
-
-            <nav class="flex items-center gap-3 text-sm">
-                <a href="/" class="rounded-lg px-3 py-2 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900">
-                    Dashboard
-                </a>
-                <a href="/devices.php" class="rounded-lg px-3 py-2 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900">
-                    Dispositivos
-                </a>
-                <a href="/events.php" class="rounded-lg px-3 py-2 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900">
-                    Eventos
-                </a>
-                <a href="/ingests.php" class="rounded-lg px-3 py-2 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900">
-                    Ingests
-                </a>
-            </nav>
-            <a href="/logout.php"
-                class="rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                title="Cerrar sesión">
-                Salir
-            </a>
-        </div>
-    </header>
+    <?php $activePage = 'devices';
+    require __DIR__ . '/_viewer_header.php'; ?>
 
     <main class="mx-auto max-w-7xl px-6 py-8">
         <?php if ($loadError !== null): ?>

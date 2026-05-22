@@ -85,6 +85,9 @@ final class StructuredEventNormalizerTest extends TestCase
         $this->assertSame(27.46, $measurements['humidityPct']);
         $this->assertSame(937, $measurements['pressureHpa']);
         $this->assertSame(1, $measurements['gps']['error']);
+        $this->assertStringContainsString('T=30.1C', $event['message_text']);
+        $this->assertStringContainsString('H=27.5%', $event['message_text']);
+        $this->assertStringContainsString('Charge=CHARGING', $event['message_text']);
 
         $this->assertSame('CHARGING', $context['tags']['chargingState']);
         $this->assertSame('walkerpisa', $context['source']['project']);
@@ -170,6 +173,37 @@ final class StructuredEventNormalizerTest extends TestCase
 
         $this->assertSame(123, $measurements['newMetric']);
         $this->assertSame('kept in extra', $context['extra']['unexpectedField']);
+    }
+
+    public function testNormalizeStructuredEventKeepsSpecificReportedMessageAndAppendsSummary(): void
+    {
+        $normalizer = new StructuredEventNormalizer();
+
+        $result = $normalizer->normalizeEvents(
+            events: [[
+                'ts' => '2026-05-18 10:02:37',
+                'level' => 'info',
+                'category' => 'https',
+                'type' => 'http_result',
+                'message' => 'HTTPS POST result failed',
+                'metrics' => [
+                    'status' => 500,
+                    'ok' => 0,
+                ],
+                'tags' => [
+                    'notificationType' => 'ping',
+                ],
+            ]],
+            ingestId: 13,
+            bridgeDeviceId: 22,
+            receivedAt: new DateTimeImmutable('2026-05-18 10:03:00'),
+        );
+
+        $event = $result['events'][0];
+
+        $this->assertStringStartsWith('HTTPS POST result failed', $event['message_text']);
+        $this->assertStringContainsString('HTTP=500', $event['message_text']);
+        $this->assertStringContainsString('Notif=ping', $event['message_text']);
     }
 
     public function testNormalizeEventWithUnixTimestampEventTs(): void

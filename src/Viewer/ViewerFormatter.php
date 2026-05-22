@@ -100,4 +100,129 @@ final class ViewerFormatter
             default => 'bg-slate-100 text-slate-700 ring-slate-200',
         };
     }
+
+    public static function eventSummary(array $event): ?string
+    {
+        $measurements = self::decodeJsonMap($event['measurements'] ?? null);
+        $context = self::decodeJsonMap($event['context'] ?? null);
+        $tags = is_array($context['tags'] ?? null) ? $context['tags'] : [];
+        $category = (string) ($event['event_category'] ?? 'unknown');
+
+        $parts = match ($category) {
+            'telemetry' => self::telemetrySummaryParts($measurements, $tags),
+            'speed' => self::speedSummaryParts($measurements),
+            'vehicle' => self::vehicleSummaryParts($measurements, $tags),
+            'https' => self::httpSummaryParts($measurements, $tags),
+            default => [],
+        };
+
+        if ($parts === []) {
+            return null;
+        }
+
+        return implode(' · ', array_slice($parts, 0, 6));
+    }
+
+    private static function telemetrySummaryParts(array $measurements, array $tags): array
+    {
+        $parts = [];
+
+        self::appendMetricPart($parts, 'T', $measurements['temperatureC'] ?? null, 'C');
+        self::appendMetricPart($parts, 'H', $measurements['humidityPct'] ?? null, '%');
+        self::appendMetricPart($parts, 'P', $measurements['pressureHpa'] ?? null, 'hPa');
+        self::appendMetricPart($parts, 'AQ', $measurements['airQuality'] ?? null);
+        self::appendMetricPart($parts, 'SOC', $measurements['socPct'] ?? null, '%');
+        self::appendMetricPart($parts, 'RSSI', $measurements['parentRssi'] ?? null, 'dBm');
+
+        if (($tags['chargingState'] ?? null) !== null && trim((string) $tags['chargingState']) !== '') {
+            $parts[] = 'Charge=' . trim((string) $tags['chargingState']);
+        }
+
+        if (($tags['iaqState'] ?? null) !== null && trim((string) $tags['iaqState']) !== '') {
+            $parts[] = 'IAQ=' . trim((string) $tags['iaqState']);
+        }
+
+        return $parts;
+    }
+
+    private static function speedSummaryParts(array $measurements): array
+    {
+        $parts = [];
+
+        self::appendMetricPart($parts, 'Vel', $measurements['speedKmh'] ?? null, 'km/h');
+        self::appendMetricPart($parts, 'Carril', $measurements['lane'] ?? null, null, 0);
+        self::appendMetricPart($parts, 'Pos', $measurements['positionM'] ?? null, 'm');
+        self::appendMetricPart($parts, 'Dist', $measurements['distanceMm'] ?? null, 'mm', 0);
+
+        return $parts;
+    }
+
+    private static function vehicleSummaryParts(array $measurements, array $tags): array
+    {
+        $parts = [];
+
+        self::appendMetricPart($parts, 'Vel final', $measurements['finalSpeedKmh'] ?? null, 'km/h');
+        self::appendMetricPart($parts, 'Vel prev', $measurements['previousSpeedKmh'] ?? null, 'km/h');
+        self::appendMetricPart($parts, 'Accel', $measurements['accelerationMps2'] ?? null, 'm/s2');
+
+        if (($tags['dynamicState'] ?? null) !== null && trim((string) $tags['dynamicState']) !== '') {
+            $parts[] = 'Estado=' . trim((string) $tags['dynamicState']);
+        }
+
+        return $parts;
+    }
+
+    private static function httpSummaryParts(array $measurements, array $tags): array
+    {
+        $parts = [];
+
+        self::appendMetricPart($parts, 'HTTP', $measurements['status'] ?? null, null, 0);
+        self::appendMetricPart($parts, 'OK', $measurements['ok'] ?? null, null, 0);
+
+        if (($tags['notificationType'] ?? null) !== null && trim((string) $tags['notificationType']) !== '') {
+            $parts[] = 'Notif=' . trim((string) $tags['notificationType']);
+        }
+
+        return $parts;
+    }
+
+    private static function appendMetricPart(
+        array &$parts,
+        string $label,
+        mixed $value,
+        ?string $unit = null,
+        ?int $decimals = 1
+    ): void {
+        if (!is_int($value) && !is_float($value) && !(is_string($value) && is_numeric($value))) {
+            return;
+        }
+
+        $parts[] = $label . '=' . self::formatMetricNumber((float) $value, $decimals) . ($unit !== null ? $unit : '');
+    }
+
+    private static function formatMetricNumber(float $value, ?int $decimals): string
+    {
+        if ($decimals === 0) {
+            return (string) (int) round($value);
+        }
+
+        $formatted = number_format($value, $decimals ?? 1, '.', '');
+
+        return rtrim(rtrim($formatted, '0'), '.');
+    }
+
+    private static function decodeJsonMap(mixed $value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+
+        if (!is_string($value) || trim($value) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($value, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
 }

@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use App\Database\Connection;
-use App\Support\Env;
 use App\Viewer\ViewerAuth;
 use App\Viewer\ViewerFormatter as F;
 use App\Viewer\ViewerQueries;
@@ -33,9 +32,6 @@ Bootstrap::init();
 SecurityHeaders::applyViewer();
 
 ViewerAuth::enforce();
-
-$appEnv = Env::get('APP_ENV', 'unknown');
-$phpVersion = PHP_VERSION;
 
 $loadError = null;
 $stats = [];
@@ -73,48 +69,8 @@ $severityOrder = ['critical', 'error', 'warn', 'info', 'unknown'];
 </head>
 
 <body class="min-h-screen bg-slate-100 text-slate-900">
-    <header class="border-b border-slate-200 bg-white">
-        <div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
-            <div>
-                <h1 class="text-2xl font-bold tracking-tight">logs-devices</h1>
-                <p class="mt-1 text-sm text-slate-500">
-                    Viewer básico de logs IoT / industriales
-                </p>
-            </div>
-
-            <div class="flex items-center gap-6">
-                <nav class="flex items-center gap-3 text-sm">
-                    <a href="/" class="rounded-lg bg-slate-900 px-3 py-2 font-medium text-white">
-                        Dashboard
-                    </a>
-                    <a href="/devices.php" class="rounded-lg px-3 py-2 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900">
-                        Dispositivos
-                    </a>
-                    <a href="/events.php" class="rounded-lg px-3 py-2 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900">
-                        Eventos
-                    </a>
-                    <a href="/ingests.php" class="rounded-lg px-3 py-2 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900">
-                        Ingests
-                    </a>
-                </nav>
-                <div class="text-right text-sm text-slate-500">
-                    <div>
-                        Entorno:
-                        <span class="font-semibold text-slate-700"><?= F::e($appEnv) ?></span>
-                    </div>
-                    <div>
-                        PHP:
-                        <span class="font-semibold text-slate-700"><?= F::e($phpVersion) ?></span>
-                    </div>
-                </div>
-                <a href="/logout.php"
-                    class="rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                    title="Cerrar sesión">
-                    Salir
-                </a>
-            </div>
-        </div>
-    </header>
+    <?php $activePage = 'dashboard';
+    require __DIR__ . '/_viewer_header.php'; ?>
 
     <main class="mx-auto max-w-7xl px-6 py-8">
         <?php if ($loadError !== null): ?>

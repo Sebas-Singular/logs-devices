@@ -163,10 +163,12 @@ final class StructuredEventNormalizer
             $deviceId = is_int($resolved) ? $resolved : null;
         }
 
-        $messageText = $this->firstNonEmptyString(
-            $event['message'] ?? null,
-            $event['raw'] ?? null,
-            $type
+        $messageText = $this->composeMessageText(
+            event: $event,
+            category: $category,
+            type: $type,
+            measurements: $measurements,
+            context: $context
         );
 
         return [
@@ -224,6 +226,228 @@ final class StructuredEventNormalizer
             'event_hash' => null,
             'created_at' => $receivedAt->format('Y-m-d H:i:s'),
         ];
+    }
+
+    private function composeMessageText(
+        array $event,
+        string $category,
+        string $type,
+        array $measurements,
+        array $context
+    ): string {
+        $reportedMessage = $this->firstNonEmptyString($event['message'] ?? null);
+        $rawMessage = $this->firstNonEmptyString($event['raw'] ?? null);
+
+        $summary = $this->buildStructuredSummary($category, $type, $measurements, $context);
+
+        if ($reportedMessage !== '' && !$this->isGenericStructuredMessage($reportedMessage, $type)) {
+            return $summary !== null
+                ? $reportedMessage . ' · ' . $summary
+                : $reportedMessage;
+        }
+
+        if ($summary !== null) {
+            return $reportedMessage !== ''
+                ? $reportedMessage . ' · ' . $summary
+                : $summary;
+        }
+
+        return $this->firstNonEmptyString(
+            $reportedMessage,
+            $rawMessage,
+            $type
+        );
+    }
+
+    private function isGenericStructuredMessage(string $message, string $type): bool
+    {
+        $normalizedMessage = strtolower(trim($message));
+        $normalizedType = strtolower(trim($type));
+        $normalizedTypeLabel = str_replace('_', ' ', $normalizedType);
+
+        if ($normalizedMessage === '') {
+            return true;
+        }
+
+        if ($normalizedMessage === $normalizedType || $normalizedMessage === $normalizedTypeLabel) {
+            return true;
+        }
+
+        return str_ends_with($normalizedType, '_snapshot')
+            ? $normalizedMessage === str_replace('_snapshot', ' snapshot', $normalizedType)
+            : false;
+    }
+
+    private function buildStructuredSummary(
+        string $category,
+        string $type,
+        array $measurements,
+        array $context
+    ): ?string {
+        $tags = is_array($context['tags'] ?? null) ? $context['tags'] : [];
+
+        $parts = match ($category) {
+            'telemetry' => $this->telemetrySummaryParts($measurements, $tags),
+            'speed' => $this->speedSummaryParts($measurements),
+            'vehicle' => $this->vehicleSummaryParts($type, $measurements, $tags),
+            'https' => $this->httpSummaryParts($measurements, $tags),
+            default => $this->genericSummaryParts($measurements, $tags),
+        };
+
+        if ($parts === []) {
+            return null;
+        }
+
+        return implode(' · ', array_slice($parts, 0, 6));
+    }
+
+    private function telemetrySummaryParts(array $measurements, array $tags): array
+    {
+        $parts = [];
+
+        $this->appendNumericPart($parts, 'T', $measurements['temperatureC'] ?? null, 'C');
+        $this->appendNumericPart($parts, 'H', $measurements['humidityPct'] ?? null, '%');
+        $this->appendNumericPart($parts, 'P', $measurements['pressureHpa'] ?? null, 'hPa');
+        $this->appendNumericPart($parts, 'AQ', $measurements['airQuality'] ?? null);
+        $this->appendNumericPart($parts, 'SOC', $measurements['socPct'] ?? null, '%');
+        $this->appendNumericPart($parts, 'RSSI', $measurements['parentRssi'] ?? null, 'dBm');
+        $this->appendNumericPart($parts, 'LiDAR', $measurements['lidarDistanceMm'] ?? null, 'mm', 0);
+
+        if (($tags['chargingState'] ?? null) !== null) {
+            $parts[] = 'Charge=' . $this->stringOrNull($tags['chargingState']);
+        }
+
+        if (($tags['iaqState'] ?? null) !== null) {
+            $parts[] = 'IAQ=' . $this->stringOrNull($tags['iaqState']);
+        }
+
+        $gps = $measurements['gps'] ?? null;
+
+        if (is_array($gps)) {
+            if (array_key_exists('error', $gps)) {
+                $parts[] = 'GPS=' . (string) $gps['error'];
+            } elseif (isset($gps['latitude'], $gps['longitude'])) {
+                $parts[] = 'GPS fix';
+            }
+        }
+
+        return array_values(array_filter($parts, static fn ($part) => $part !== null && $part !== ''));
+    }
+
+    private function speedSummaryParts(array $measurements): array
+    {
+        $parts = [];
+
+        $this->appendNumericPart($parts, 'Vel', $measurements['speedKmh'] ?? null, 'km/h');
+        $this->appendNumericPart($parts, 'Carril', $measurements['lane'] ?? null, null, 0);
+        $this->appendNumericPart($parts, 'Pos', $measurements['positionM'] ?? null, 'm');
+        $this->appendNumericPart($parts, 'Dist', $measurements['distanceMm'] ?? null, 'mm', 0);
+
+        return $parts;
+    }
+
+    private function vehicleSummaryParts(string $type, array $measurements, array $tags): array
+    {
+        $parts = [];
+
+        $parts[] = 'Tipo=' . $type;
+        $this->appendNumericPart($parts, 'Vel final', $measurements['finalSpeedKmh'] ?? null, 'km/h');
+        $this->appendNumericPart($parts, 'Vel prev', $measurements['previousSpeedKmh'] ?? null, 'km/h');
+        $this->appendNumericPart($parts, 'Accel', $measurements['accelerationMps2'] ?? null, 'm/s2');
+        $this->appendNumericPart($parts, 'Dist', $measurements['distanceMm'] ?? null, 'mm', 0);
+
+        if (($tags['dynamicState'] ?? null) !== null) {
+            $parts[] = 'Estado=' . $this->stringOrNull($tags['dynamicState']);
+        }
+
+        if (($tags['quality'] ?? null) !== null) {
+            $parts[] = 'Calidad=' . $this->stringOrNull($tags['quality']);
+        }
+
+        return $parts;
+    }
+
+    private function httpSummaryParts(array $measurements, array $tags): array
+    {
+        $parts = [];
+
+        $this->appendNumericPart($parts, 'HTTP', $measurements['status'] ?? null, null, 0);
+        $this->appendNumericPart($parts, 'OK', $measurements['ok'] ?? null, null, 0);
+
+        if (($tags['notificationType'] ?? null) !== null) {
+            $parts[] = 'Notif=' . $this->stringOrNull($tags['notificationType']);
+        }
+
+        if (($tags['protocol'] ?? null) !== null) {
+            $parts[] = 'Proto=' . $this->stringOrNull($tags['protocol']);
+        }
+
+        return $parts;
+    }
+
+    private function genericSummaryParts(array $measurements, array $tags): array
+    {
+        $parts = [];
+
+        foreach ($measurements as $key => $value) {
+            if (!is_scalar($value) || $value === '') {
+                continue;
+            }
+
+            $parts[] = $key . '=' . $this->formatScalar($value);
+
+            if (count($parts) >= 4) {
+                break;
+            }
+        }
+
+        foreach ($tags as $key => $value) {
+            if (!is_scalar($value) || $value === '') {
+                continue;
+            }
+
+            $parts[] = $key . '=' . $this->formatScalar($value);
+
+            if (count($parts) >= 6) {
+                break;
+            }
+        }
+
+        return $parts;
+    }
+
+    private function appendNumericPart(
+        array &$parts,
+        string $label,
+        mixed $value,
+        ?string $unit = null,
+        ?int $decimals = 1
+    ): void {
+        if (!is_int($value) && !is_float($value) && !(is_string($value) && is_numeric($value))) {
+            return;
+        }
+
+        $parts[] = $label . '=' . $this->formatNumeric((float) $value, $decimals) . ($unit !== null ? $unit : '');
+    }
+
+    private function formatNumeric(float $value, ?int $decimals): string
+    {
+        if ($decimals === 0) {
+            return (string) (int) round($value);
+        }
+
+        $formatted = number_format($value, $decimals ?? 1, '.', '');
+
+        return rtrim(rtrim($formatted, '0'), '.');
+    }
+
+    private function formatScalar(mixed $value): string
+    {
+        if (is_int($value) || is_float($value)) {
+            return $this->formatNumeric((float) $value, is_int($value) ? 0 : 1);
+        }
+
+        return trim((string) $value);
     }
 
     private function resolveEventTimestamp(
