@@ -1,11 +1,12 @@
-name: Deploy to cdmon
+name: Test
 
 on:
-  workflow_dispatch:
+  push:
+  pull_request:
 
 jobs:
   phpunit:
-    name: PHPUnit before deploy
+    name: PHPUnit
     runs-on: ubuntu-latest
 
     services:
@@ -93,86 +94,3 @@ jobs:
 
       - name: Run PHPUnit
         run: vendor/bin/phpunit
-
-  ftp-deploy:
-    name: Upload web files by FTP
-    runs-on: ubuntu-latest
-    needs: phpunit
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: "8.3"
-          extensions: pdo_mysql, mbstring, intl, zip, dom, xml, xmlwriter
-          tools: composer:v2
-
-      - name: Install production dependencies
-        run: |
-          rm -rf vendor
-          composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
-
-      - name: Deploy
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          port: 21
-          protocol: ftp
-          #dry-run: true
-          log-level: verbose
-          local-dir: ./
-          server-dir: ${{ secrets.FTP_TARGET_DIR }}
-          exclude: |
-            **/.git*
-            **/.git*/**
-            **/.github/**
-            **/.DS_Store
-
-            .env
-            .env.*
-            **/.env
-            **/.env.*
-
-            src/Config/runtime.php
-            src/Config/runtime.php.*
-            src/Config/runtime.local.php
-            src/Config/runtime.local.php.*
-
-            private/**
-            logs-notifications/**
-
-            storage/**
-
-            services/logs/storage/**
-            services/logs/legacy_access_*.ndjson
-            services/logs/*.bak
-            services/logs/storage/*.bak
-
-            docs/**
-            scripts/**
-            tests/**
-            node_modules/**
-
-            docker/**
-            .docker/**
-            docker-compose.yml
-            Dockerfile
-
-            index.php
-            README.md
-
-            composer.json
-            composer.lock
-            phpunit.xml
-            phpunit.xml.dist
-            .phpunit.result.cache
-
-            .ftp-deploy-sync-state.json
-
-            test-*.json
-            **/test-*.json

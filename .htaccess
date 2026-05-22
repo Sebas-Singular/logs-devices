@@ -1,0 +1,48 @@
+Options -Indexes
+
+RewriteEngine On
+RewriteBase /
+
+# Preserve Authorization header for PHP-FPM / FastCGI environments.
+RewriteCond %{HTTP:Authorization} .
+RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+# Bloqueo de acceso directo a /public.
+RewriteCond %{THE_REQUEST} \s/+public(?:/|\s) [NC]
+RewriteRule ^public(?:/|$) - [F,L,NC]
+
+# Bloqueo de directorios no públicos.
+RewriteRule ^services/logs/storage(?:/|$) - [F,L,NC]
+RewriteRule ^(?:src|vendor|storage|scripts|docs|tests|private|logs-notifications)(?:/|$) - [F,L,NC]
+
+# Bloqueo de dotfiles: .git, .env, .htaccess, .phpunit.result.cache,
+# .ftp-deploy-sync-state.json, etc.
+RewriteRule (^|/)\. - [F,L]
+
+# Bloqueo de ficheros sensibles o huérfanos en raíz.
+RewriteRule ^(?:composer\.(?:json|lock)|phpunit\.xml(?:\.dist)?|docker-compose\.ya?ml|README\.md|home\.html)$ - [F,L,NC]
+
+# Rutas públicas del visor (rewrites internos).
+RewriteRule ^$ public/index.php [L,QSA]
+RewriteRule ^index\.php$ public/index.php [L,QSA]
+RewriteRule ^devices\.php$ public/devices.php [L,QSA]
+RewriteRule ^device\.php$ public/device.php [L,QSA]
+RewriteRule ^events\.php$ public/events.php [L,QSA]
+RewriteRule ^event\.php$ public/event.php [L,QSA]
+RewriteRule ^ingests\.php$ public/ingests.php [L,QSA]
+RewriteRule ^ingest\.php$ public/ingest.php [L,QSA]
+RewriteRule ^login\.php$ public/login.php [L,QSA]
+RewriteRule ^logout\.php$ public/logout.php [L,QSA]
+
+# Endpoints API.
+RewriteRule ^api/ingest\.php$ public/api/ingest.php [L,QSA]
+RewriteRule ^api/health\.php$ public/api/health.php [L,QSA]
+RewriteRule ^api/admin/reprocess\.php$ public/api/admin/reprocess.php [L,QSA]
+RewriteRule ^api/admin/archive_raw\.php$ public/api/admin/archive_raw.php [L,QSA]
+RewriteRule ^api/admin/import_services_logs\.php$ public/api/admin/import_services_logs.php [L,QSA]
+
+# Endpoint legacy del bridge: el fichero existe en /services/logs/index.php.
+# Apache lo sirve directamente para /services/logs/index.php gracias a la
+# ausencia de DirectoryIndex bloqueante. Para /services/logs/ (con barra final),
+# DirectoryIndex resuelve a index.php porque el directorio existe físicamente.
+# No necesita rewrite explícito siempre que NO se bloquee con whitelist.
