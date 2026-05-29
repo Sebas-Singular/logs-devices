@@ -163,7 +163,6 @@ jobs:
             docker-compose.yml
             Dockerfile
 
-            index.php
             README.md
 
             composer.json
