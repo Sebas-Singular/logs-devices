@@ -33,6 +33,12 @@ final class DeviceResolver
     ): int {
         $seenAtSql = $seenAt->format('Y-m-d H:i:s');
 
+        // Truncar a la longitud de columna antes de buscar/insertar: un valor
+        // demasiado largo provoca "Data too long" (22001) → 500. Truncamos antes
+        // de la búsqueda para que el lookup y el insert usen el mismo valor.
+        $bridgeIdReported = $this->truncate($bridgeIdReported, 50);
+        $bridgeName = $this->truncate($bridgeName, 255);
+
         $stmt = $this->pdo->prepare(
             'SELECT id, name, name_origin, mac_address, metadata
                FROM devices
@@ -115,6 +121,16 @@ final class DeviceResolver
     ): int {
         $seenAtSql = $seenAt->format('Y-m-d H:i:s');
 
+        // Truncar a la longitud de columna (external_id VARCHAR(50), name
+        // VARCHAR(255)) para evitar "Data too long" (22001) → 500.
+        if ($externalId !== null) {
+            $externalId = $this->truncate($externalId, 50);
+        }
+
+        if ($name !== null) {
+            $name = $this->truncate($name, 255);
+        }
+
         $existing = $this->findBeaconByMac($mac);
 
         if ($existing === false && $externalId !== null && $externalId !== '') {
@@ -161,6 +177,17 @@ final class DeviceResolver
     // =========================================================================
     // Métodos privados
     // =========================================================================
+
+    private function truncate(string $value, int $maxLength): string
+    {
+        if (function_exists('mb_strlen')) {
+            return mb_strlen($value, 'UTF-8') <= $maxLength
+                ? $value
+                : (string) mb_substr($value, 0, $maxLength, 'UTF-8');
+        }
+
+        return strlen($value) <= $maxLength ? $value : substr($value, 0, $maxLength);
+    }
 
     private function findBeaconByMac(string $mac): array|false
     {

@@ -250,12 +250,12 @@ final class LogParser
             'event_category'   => $parsedEvent['event_category'],
             'device_mac_raw'   => $parsedEvent['device_mac'],
             'message_text'     => $parsedEvent['message_text'],
-            'measurements'     => json_encode($parsedEvent['measurements'] ?? [], JSON_UNESCAPED_UNICODE),
-            'context'          => json_encode($parsedEvent['context'] ?? [], JSON_UNESCAPED_UNICODE),
+            'measurements'     => $this->jsonForColumn($parsedEvent['measurements'] ?? []),
+            'context'          => $this->jsonForColumn($parsedEvent['context'] ?? []),
             'parse_ok'         => $parsedEvent['parse_ok'] ? 1 : 0,
             'parse_error'      => $parsedEvent['parse_error'],
             'quality_status'   => $parsedEvent['quality_status'],
-            'anomaly_flags'    => json_encode($parsedEvent['anomaly_flags'] ?? [], JSON_UNESCAPED_UNICODE),
+            'anomaly_flags'    => $this->jsonForColumn($parsedEvent['anomaly_flags'] ?? []),
             'event_hash'       => $this->computeEventHash($parsedEvent, $ingestId),
             'created_at'       => $receivedAt->format('Y-m-d H:i:s'),
         ];
@@ -276,6 +276,25 @@ final class LogParser
     // La columna event_hash es NULL en log_events para eventos malformados:
     // no tiene sentido deduplicar algo cuyo contenido no entendemos.
     // -------------------------------------------------------------------------
+    // -------------------------------------------------------------------------
+    // jsonForColumn
+    // -------------------------------------------------------------------------
+    // Codifica un valor para una columna JSON tolerando UTF-8 inválido. Sin la
+    // sustitución, un byte corrupto haría que json_encode devolviese false, lo
+    // que se insertaría como cadena vacía en una columna JSON (valor inválido)
+    // y reventaría el INSERT. Devolvemos siempre JSON válido ('null' como
+    // último recurso).
+    // -------------------------------------------------------------------------
+    private function jsonForColumn(mixed $value): string
+    {
+        $encoded = json_encode(
+            $value,
+            JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+        );
+
+        return $encoded !== false ? $encoded : 'null';
+    }
+
     private function computeEventHash(array $parsedEvent, int $ingestId): ?string
     {
         if (!$parsedEvent['parse_ok']) {

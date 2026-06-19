@@ -46,51 +46,51 @@ if ($serverError !== null) {
 
 $rawBody = file_get_contents('php://input');
 
-if ($rawBody === false || trim($rawBody) === '') {
-    $error = [
-        'status' => 400,
-        'code' => 'empty_body',
-        'message' => 'Request body is empty.',
-    ];
+if ($rawBody === false) {
+    $rawBody = '';
+}
 
-    writeRejectedRequest($writer, $receivedAt, $error, null);
+// Capa 1: sanear UTF-8 inválido del cuerpo ANTES de parsear. Un byte corrupto
+// en logText invalida el JSON y puede reventar el INSERT en base de datos. Si
+// devolvemos 4xx/5xx por ello, el bridge reintenta el mismo bloque para siempre
+// (solo avanza su offset ante un 2xx) y se atasca toda la subida.
+$rawBody = sanitizeUtf8($rawBody);
 
-    JsonResponse::send([
-        'ok' => false,
-        'error' => $error['code'],
-        'message' => $error['message'],
-    ], $error['status']);
+if (trim($rawBody) === '') {
+    // Lote sin contenido: lo reconocemos (200) para que el bridge avance.
+    ackDiscarded($writer, $receivedAt, 'empty_body', 'Request body is empty.', null);
 }
 
 $contentHash = hash('sha256', $rawBody);
-$payload = json_decode($rawBody, true);
 
-if (json_last_error() !== JSON_ERROR_NONE) {
-    $error = [
-        'status' => 400,
-        'code' => 'malformed_json',
-        'message' => 'Malformed JSON: ' . json_last_error_msg(),
-    ];
+// Capa 2: decodificar de forma tolerante. JSON_INVALID_UTF8_SUBSTITUTE sustituye
+// las secuencias UTF-8 inválidas por U+FFFD en lugar de hacer fallar el decode.
+$payload = json_decode($rawBody, true, 512, JSON_INVALID_UTF8_SUBSTITUTE);
 
-    writeRejectedRequest($writer, $receivedAt, $error, $rawBody);
-
-    JsonResponse::send([
-        'ok' => false,
-        'error' => $error['code'],
-        'message' => $error['message'],
-    ], $error['status']);
+if (json_last_error() !== JSON_ERROR_NONE || !is_array($payload)) {
+    // Contenido no decodificable: ACK 200 igual y archivamos el cuerpo en
+    // rejected/ para depurar sin atascar al dispositivo.
+    ackDiscarded(
+        $writer,
+        $receivedAt,
+        'malformed_json',
+        'Malformed JSON: ' . json_last_error_msg(),
+        $rawBody
+    );
 }
 
 $payloadError = $validator->validatePayload($payload);
 
 if ($payloadError !== null) {
-    writeRejectedRequest($writer, $receivedAt, $payloadError, $rawBody);
-
-    JsonResponse::send([
-        'ok' => false,
-        'error' => $payloadError['code'],
-        'message' => $payloadError['message'],
-    ], $payloadError['status']);
+    // El payload llegó pero su contenido no es procesable. Sigue siendo un
+    // problema de CONTENIDO, así que ACK 200 (no atascar el bridge).
+    ackDiscarded(
+        $writer,
+        $receivedAt,
+        $payloadError['code'],
+        $payloadError['message'],
+        $rawBody
+    );
 }
 
 $payloadNormalizer = new PayloadNormalizer();
@@ -99,6 +99,10 @@ $normalizedPayload = $payloadNormalizer->normalize($payload);
 $bridgeId = $normalizedPayload['bridge_id_reported'] !== ''
     ? (string) $normalizedPayload['bridge_id_reported']
     : 'unknown';
+
+// bridge_id_reported es VARCHAR(50) y también se usa como external_id del
+// bridge en devices: truncar evita un "Data too long" (22001) → 500.
+$bridgeId = truncateForColumn($bridgeId, 50);
 
 $bridgeName = (string) $normalizedPayload['bridge_name'];
 $logText = (string) $normalizedPayload['raw_log_text'];
@@ -288,19 +292,16 @@ WHERE id = :id'
         'content_hash' => $contentHash,
     ]);
 } catch (Throwable $exception) {
-    $error = [
-        'status' => 500,
-        'code' => 'ingest_failed',
-        'message' => $exception->getMessage(),
-    ];
-
-    writeRejectedRequest($writer, $receivedAt, $error, $rawBody);
-
-    JsonResponse::send([
-        'ok' => false,
-        'error' => 'ingest_failed',
-        'message' => $exception->getMessage(),
-    ], 500);
+    // Capa 3: NUNCA devolver 5xx por el CONTENIDO de los logs. Si el procesado
+    // falla (DB, parseo, etc.) registramos el error y archivamos el cuerpo, pero
+    // respondemos 200 para que el bridge avance su offset y no se atasque.
+    ackDiscarded(
+        $writer,
+        $receivedAt,
+        'ingest_failed',
+        $exception->getMessage(),
+        $rawBody
+    );
 }
 
 function processNormalizedPayload(
@@ -470,11 +471,87 @@ function jsonForDb(mixed $value): string
 
 function truncateForColumn(string $value, int $maxLength): string
 {
-    if (strlen($value) <= $maxLength) {
-        return $value;
+    if (function_exists('mb_strlen')) {
+        return mb_strlen($value, 'UTF-8') <= $maxLength
+            ? $value
+            : (string) mb_substr($value, 0, $maxLength, 'UTF-8');
     }
 
-    return substr($value, 0, $maxLength);
+    // Fallback por bytes: puede cortar un carácter multibyte, pero nunca excede
+    // la longitud de columna.
+    return strlen($value) <= $maxLength ? $value : substr($value, 0, $maxLength);
+}
+
+// -----------------------------------------------------------------------------
+// sanitizeUtf8
+// -----------------------------------------------------------------------------
+// Elimina/sustituye secuencias UTF-8 inválidas del cuerpo recibido. Los bridges
+// escriben logText con bytes potencialmente corruptos; un solo byte inválido
+// invalida el JSON y rompe el INSERT en base de datos. Lo limpiamos antes de
+// cualquier otro procesado.
+// -----------------------------------------------------------------------------
+function sanitizeUtf8(string $raw): string
+{
+    if ($raw === '') {
+        return '';
+    }
+
+    if (function_exists('mb_convert_encoding')) {
+        $converted = @mb_convert_encoding($raw, 'UTF-8', 'UTF-8');
+
+        if (is_string($converted)) {
+            return $converted;
+        }
+    }
+
+    if (function_exists('iconv')) {
+        $clean = @iconv('UTF-8', 'UTF-8//IGNORE', $raw);
+
+        if (is_string($clean)) {
+            return $clean;
+        }
+    }
+
+    return $raw;
+}
+
+// -----------------------------------------------------------------------------
+// ackDiscarded
+// -----------------------------------------------------------------------------
+// Reconoce un lote como recibido (HTTP 200) aunque su contenido se descarte.
+//
+// Principio rector: el bridge solo avanza su uploaded_offset ante una respuesta
+// 2xx. Cualquier 4xx/5xx por CONTENIDO lo deja reintentando el mismo bloque
+// indefinidamente y atasca toda la subida. Por eso, ante contenido inválido,
+// respondemos 200, registramos el motivo en el log del servidor y archivamos el
+// cuerpo en rejected/ para poder depurarlo después.
+// -----------------------------------------------------------------------------
+function ackDiscarded(
+    NdjsonWriter $writer,
+    DateTimeImmutable $receivedAt,
+    string $reason,
+    string $message,
+    ?string $rawBody
+): never {
+    writeRejectedRequest(
+        $writer,
+        $receivedAt,
+        [
+            'status' => 200,
+            'code' => $reason,
+            'message' => $message,
+        ],
+        $rawBody
+    );
+
+    error_log('[log-ingest] discarded ' . $reason . ': ' . $message);
+
+    JsonResponse::send([
+        'ok' => true,
+        'discarded' => true,
+        'reason' => $reason,
+        'message' => $message,
+    ], 200);
 }
 
 function applyIngestRateLimit(): void

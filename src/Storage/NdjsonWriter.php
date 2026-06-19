@@ -18,8 +18,17 @@ final class NdjsonWriter
 
         $jsonLine = json_encode(
             $record,
-            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
         );
+
+        if ($jsonLine === false) {
+            // Reintento tolerante: no perder el archivo crudo por un byte suelto.
+            $jsonLine = json_encode(
+                $record,
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+                    | JSON_INVALID_UTF8_SUBSTITUTE | JSON_PARTIAL_OUTPUT_ON_ERROR
+            );
+        }
 
         if ($jsonLine === false) {
             throw new RuntimeException('Unable to encode NDJSON record.');
