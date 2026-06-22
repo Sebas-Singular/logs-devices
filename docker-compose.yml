@@ -1,0 +1,64 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: .docker/php-apache/Dockerfile
+    container_name: logs_devices_app
+    ports:
+      - "8080:80"
+    volumes:
+      - ./:/usr/home/singularthings.io/web/logs-devices
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: local
+    networks:
+      - logs_devices_net
+
+  db:
+    image: mariadb:10.11
+    container_name: logs_devices_db
+    restart: unless-stopped
+    ports:
+      - "3307:3306"
+    environment:
+      MARIADB_ROOT_PASSWORD: root_dev_password
+      MARIADB_DATABASE: logs-devices
+      MARIADB_USER: logs_user
+      MARIADB_PASSWORD: logs_pass_dev
+    volumes:
+      - logs_devices_db_data:/var/lib/mysql
+      - ./docker/mariadb/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 15s
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - logs_devices_net
+
+  phpmyadmin:
+    image: phpmyadmin:5.2
+    container_name: logs_devices_phpmyadmin
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    environment:
+      PMA_HOST: db
+      PMA_PORT: 3306
+      PMA_USER: logs_user
+      PMA_PASSWORD: logs_pass_dev
+      UPLOAD_LIMIT: 35M
+    depends_on:
+      - db
+    networks:
+      - logs_devices_net
+
+volumes:
+  logs_devices_db_data:
+
+networks:
+  logs_devices_net:
+    driver: bridge

@@ -1,0 +1,62 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Plantilla de configuración runtime.
+ *
+ * Copia este fichero a src/Config/runtime.php y rellena con los valores
+ * reales del entorno. src/Config/runtime.php NO se versiona (está en .gitignore)
+ * y NO se sube por el workflow de despliegue.
+ *
+ * Cada entorno (local, producción) mantiene su propio runtime.php con sus secretos.
+ */
+
+return [
+    // ===== Aplicación =====
+    'APP_ENV' => 'production',
+    'APP_URL' => 'https://logs.singularthings.io',
+
+    // ===== Ingesta de bridges =====
+    'LOG_INGEST_SECRET'     => 'CHANGE_ME',
+    'LOG_INGEST_USER_AGENT' => 'WalkerPisa-Bridge-Logs',
+
+    // ===== Base de datos =====
+    'DB_HOST'     => 'localhost',
+    'DB_PORT'     => '3306',
+    'DB_DATABASE' => 'logs-devices',
+    'DB_USERNAME' => 'CHANGE_ME',
+    'DB_PASSWORD' => 'CHANGE_ME',
+
+    // ===== Viewer (HTTP Basic Auth) =====
+    'VIEWER_AUTH_ENABLED'  => 'true',
+    'VIEWER_AUTH_USERNAME' => 'admin',
+    'VIEWER_AUTH_PASSWORD' => 'CHANGE_ME',
+
+    // ===== Endpoints de administración (desactivados por defecto) =====
+    'REPROCESS_ENABLED'           => 'false',
+    'ADMIN_REPROCESS_TOKEN'       => 'CHANGE_ME',
+    'ARCHIVE_RAW_ENDPOINT_ENABLED' => 'false',
+
+    // ===== Importador desde services/logs/storage =====
+    'SERVICES_LOGS_IMPORT_ENABLED' => 'false',
+    'SERVICES_LOGS_STORAGE_PATH' => dirname(__DIR__, 2) . '/services/logs/storage',
+
+    // ===== Rate limiting de ingesta =====
+    'INGEST_RATE_LIMIT_ENABLED'         => 'true',
+    'INGEST_RATE_LIMIT_MAX'             => '1000',
+    'INGEST_RATE_LIMIT_WINDOW_SECONDS'  => '600',
+
+    // ===== Viewer — sesión =====
+    // Tiempo en segundos de inactividad antes de cerrar la sesión del visor.
+    'VIEWER_SESSION_LIFETIME' => '1800',
+
+    // ===== Endpoint legacy — forward =====
+    // Desactivar solo para mantenimiento o debug. En producción debe ser 'true'.
+    'LEGACY_FORWARD_ENABLED' => 'true',
+
+    // ===== Storage =====
+    // Ruta absoluta base para NDJSON, rate-limit y sesiones.
+    // Si se omite, Bootstrap usa {project_root}/storage como fallback.
+    // 'STORAGE_BASE_PATH' => '/ruta/absoluta/storage',
+];

@@ -1,16 +1,69 @@
-.DS_Store
-.env
-.ftp-deploy-sync-state.json
-
-# Runtime logs are generated on the server and must not be deployed from Git.
-
-!storage/.gitkeep
-!storage/.htaccess
-
-
-# Local tooling
-node_modules/
+# =============================================================================
+# .gitignore
+# =============================================================================
+ 
+# Composer: dependencias instaladas localmente
+# vendor/ se genera con "docker compose exec app composer install"
+# En producción se sube via GitHub Actions (ver workflow)
 vendor/
-.phpunit.cache/
+ 
+# Fichero de configuración local de PHPUnit (sobreescribe phpunit.xml.dist)
+phpunit.xml
+ 
+# Secretos y configuración local
+private/.env
+ 
+# Datos históricos locales (JSONs de semanas, NDJSONs generados)
+# Estos no van al repo: pueden ser grandes y son datos reales de dispositivos
+private/storage/
+ 
+# Storage local de desarrollo (los JSON de semanas históricas sí van al repo
+# porque los necesitamos para el importador histórico, pero los generados no)
+storage/bridge_logs_*.ndjson
+ 
+# IDEs y editores
 .idea/
 .vscode/
+*.swp
+*.swo
+*~
+ 
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+ 
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+ 
+# Logs de PHP locales
+*.log
+
+.phpunit.result.cache
+
+src/Config/runtime.local.php
+src/Config/runtime.php
+
+# Logs from external notification/backend services
+logs-notifications/
+
+# Datos runtime del legacy y debug logs
+services/logs/storage/
+services/logs/legacy_access_*.ndjson
+services/logs/*.bak
+
+# Datos runtime de la app
+storage/
+
+# Secretos
+src/Config/runtime.php
+src/Config/runtime.local.php
+src/Config/runtime.local.php.*
+private/
+
+# Estado FTP
+.ftp-deploy-sync-state.json
+
+test-*.json
