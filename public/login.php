@@ -63,23 +63,20 @@ $sessionMinutes = (int) round(ViewerSession::lifetime() / 60);
 <html lang="es">
 
 <head>
-    <meta charset="utf-8">
-    <title>logs-devices · Acceso</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="robots" content="noindex, nofollow">
-    <script src="https://cdn.tailwindcss.com"></script>
+    <?php $pageTitle = 'Acceso';
+    require __DIR__ . '/_viewer_head.php'; ?>
 </head>
 
-<body class="min-h-screen bg-slate-900 flex items-center justify-center px-4">
+<body class="min-h-screen bg-ink-900 flex items-center justify-center px-4">
 
     <div class="w-full max-w-sm">
 
         <div class="mb-8 text-center">
-            <p class="text-xs font-mono tracking-widest text-slate-500 uppercase mb-2">
+            <p class="text-xs font-mono tracking-widest text-ink-500 uppercase mb-2">
                 Singular Things
             </p>
             <h1 class="text-2xl font-bold text-white">logs-devices</h1>
-            <p class="mt-1 text-sm text-slate-400">Visor de logs IoT</p>
+            <p class="mt-1 text-sm text-ink-400">Visor de logs IoT</p>
         </div>
 
         <?php if ($error !== null): ?>
@@ -91,14 +88,14 @@ $sessionMinutes = (int) round(ViewerSession::lifetime() / 60);
         <form
             method="POST"
             action="/login.php?redirect=<?= urlencode($redirectTo) ?>"
-            class="rounded-xl border border-slate-700 bg-slate-800 px-6 py-8 shadow-xl space-y-5">
+            class="rounded-xl border border-ink-700 bg-ink-800 px-6 py-8 shadow-xl space-y-5">
             <input type="hidden" name="csrf_token"
                 value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
             <input type="hidden" name="redirect"
                 value="<?= htmlspecialchars($redirectTo, ENT_QUOTES, 'UTF-8') ?>">
 
             <div>
-                <label for="username" class="block text-xs font-medium text-slate-400 mb-1.5">
+                <label for="username" class="block text-xs font-medium text-ink-400 mb-1.5">
                     Usuario
                 </label>
                 <input
@@ -108,14 +105,14 @@ $sessionMinutes = (int) round(ViewerSession::lifetime() / 60);
                     autocomplete="username"
                     required
                     autofocus
-                    class="w-full rounded-lg border border-slate-600 bg-slate-700 text-white
-                       px-3 py-2 text-sm placeholder-slate-500
+                    class="w-full rounded-lg border border-ink-600 bg-ink-700 text-white
+                       px-3 py-2 text-sm placeholder-ink-500
                        focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
                        transition-colors">
             </div>
 
             <div>
-                <label for="password" class="block text-xs font-medium text-slate-400 mb-1.5">
+                <label for="password" class="block text-xs font-medium text-ink-400 mb-1.5">
                     Contraseña
                 </label>
                 <input
@@ -124,7 +121,7 @@ $sessionMinutes = (int) round(ViewerSession::lifetime() / 60);
                     type="password"
                     autocomplete="current-password"
                     required
-                    class="w-full rounded-lg border border-slate-600 bg-slate-700 text-white
+                    class="w-full rounded-lg border border-ink-600 bg-ink-700 text-white
                        px-3 py-2 text-sm
                        focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
                        transition-colors">
@@ -136,12 +133,12 @@ $sessionMinutes = (int) round(ViewerSession::lifetime() / 60);
                    text-white font-medium text-sm py-2.5 px-4
                    transition-colors duration-150
                    focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
-                   focus:ring-offset-slate-800">
+                   focus:ring-offset-ink-800">
                 Acceder
             </button>
         </form>
 
-        <p class="mt-4 text-center text-xs text-slate-600">
+        <p class="mt-4 text-center text-xs text-ink-600">
             La sesión expira tras <?= $sessionMinutes ?> minutos de inactividad.
         </p>
 

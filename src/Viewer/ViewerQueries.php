@@ -10,103 +10,6 @@ final class ViewerQueries
 {
     public function __construct(private readonly PDO $pdo) {}
 
-    public function dashboardStats(): array
-    {
-        return [
-            'devices_total' => $this->count('SELECT COUNT(*) FROM devices'),
-            'bridges_total' => $this->count("SELECT COUNT(*) FROM devices WHERE device_kind = 'bridge'"),
-            'beacons_total' => $this->count("SELECT COUNT(*) FROM devices WHERE device_kind = 'baliza'"),
-
-            'ingests_total' => $this->count('SELECT COUNT(*) FROM log_ingests'),
-            'ingests_processed' => $this->count("SELECT COUNT(*) FROM log_ingests WHERE status = 'processed'"),
-            'ingests_error' => $this->count("SELECT COUNT(*) FROM log_ingests WHERE status = 'error'"),
-            'ingests_received' => $this->count("SELECT COUNT(*) FROM log_ingests WHERE status = 'received'"),
-
-            'events_total' => $this->count('SELECT COUNT(*) FROM log_events'),
-            'events_parse_ok' => $this->count('SELECT COUNT(*) FROM log_events WHERE parse_ok = 1'),
-            'events_parse_error' => $this->count('SELECT COUNT(*) FROM log_events WHERE parse_ok = 0'),
-        ];
-    }
-
-    public function severityCounts(): array
-    {
-        $counts = [
-            'critical' => 0,
-            'error' => 0,
-            'warn' => 0,
-            'info' => 0,
-            'unknown' => 0,
-        ];
-
-        $stmt = $this->pdo->query(
-            'SELECT severity, COUNT(*) AS total
-               FROM log_events
-              GROUP BY severity'
-        );
-
-        foreach ($stmt->fetchAll() as $row) {
-            $severity = (string) $row['severity'];
-            $counts[$severity] = (int) $row['total'];
-        }
-
-        return $counts;
-    }
-
-    public function eventTypeCounts(): array
-    {
-        $stmt = $this->pdo->query(
-            'SELECT event_type, parse_ok, COUNT(*) AS total
-               FROM log_events
-              GROUP BY event_type, parse_ok
-              ORDER BY total DESC'
-        );
-
-        return $stmt->fetchAll();
-    }
-
-    public function latestEvents(int $limit = 20): array
-    {
-        $limit = max(1, min($limit, 100));
-
-        $stmt = $this->pdo->prepare(
-            'SELECT
-                le.id,
-                le.ingest_id,
-                le.device_id,
-                le.bridge_device_id,
-                le.event_timestamp,
-                le.received_at,
-                le.severity,
-                le.severity_origin,
-                le.event_type,
-                le.event_category,
-                le.device_mac_raw,
-                le.parse_ok,
-                le.parse_error,
-                le.message_text,
-
-                d.device_kind AS device_kind,
-                d.name AS device_name,
-                d.external_id AS device_external_id,
-                d.mac_address AS device_mac_address,
-
-                bridge.name AS bridge_name,
-                bridge.external_id AS bridge_external_id
-             FROM log_events le
-             LEFT JOIN devices d
-               ON d.id = le.device_id
-             LEFT JOIN devices bridge
-               ON bridge.id = le.bridge_device_id
-             ORDER BY le.event_timestamp DESC, le.id DESC
-             LIMIT :limit'
-        );
-
-        $stmt->bindValue('limit', $limit, PDO::PARAM_INT);
-        $stmt->execute();
-
-        return $stmt->fetchAll();
-    }
-
     public function devicesList(): array
     {
         $stmt = $this->pdo->query(
@@ -211,28 +114,39 @@ final class ViewerQueries
         return $result;
     }
 
+    /**
+     * Categorías disponibles como filtro, con la fecha de su último evento.
+     *
+     * El visor usa last_event_at para separar las que siguen reportando de las
+     * que existen solo en el histórico, en lugar de mezclarlas todas en la
+     * misma lista como si todas siguieran vivas.
+     */
     public function eventCategoryOptions(): array
     {
-        $stmt = $this->pdo->query(
-            "SELECT
-            COALESCE(NULLIF(event_category, ''), 'unknown') AS value,
-            COUNT(*) AS total
-         FROM log_events
-         GROUP BY COALESCE(NULLIF(event_category, ''), 'unknown')
-         ORDER BY value ASC"
-        );
-
-        return $stmt->fetchAll();
+        return $this->filterOptions('event_category');
     }
 
     public function eventTypeOptions(): array
     {
+        return $this->filterOptions('event_type');
+    }
+
+    /**
+     * @return list<array{value: string, total: int, last_event_at: ?string}>
+     */
+    private function filterOptions(string $column): array
+    {
+        if (!in_array($column, ['event_category', 'event_type'], true)) {
+            return [];
+        }
+
         $stmt = $this->pdo->query(
             "SELECT
-            COALESCE(NULLIF(event_type, ''), 'unknown') AS value,
-            COUNT(*) AS total
+            COALESCE(NULLIF({$column}, ''), 'unknown') AS value,
+            COUNT(*) AS total,
+            MAX(event_timestamp) AS last_event_at
          FROM log_events
-         GROUP BY COALESCE(NULLIF(event_type, ''), 'unknown')
+         GROUP BY COALESCE(NULLIF({$column}, ''), 'unknown')
          ORDER BY value ASC"
         );
 
@@ -511,6 +425,8 @@ final class ViewerQueries
             le.device_mac_raw,
             le.parse_ok,
             le.parse_error,
+            le.quality_status,
+            le.anomaly_flags,
             le.message_text,
             le.measurements,
             le.context,
@@ -640,7 +556,6 @@ final class ViewerQueries
             le.ingest_id,
             le.device_id,
             le.bridge_device_id,
-            NULL AS line_number,
             le.event_hash,
             le.event_timestamp,
             le.received_at,
@@ -961,10 +876,5 @@ final class ViewerQueries
         $stmt->execute();
 
         return $stmt->fetchAll();
-    }
-
-    private function count(string $sql): int
-    {
-        return (int) $this->pdo->query($sql)->fetchColumn();
     }
 }

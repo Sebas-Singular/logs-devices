@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use App\Database\Connection;
-use App\Support\Env;
 use App\Viewer\ViewerAuth;
 use App\Viewer\ViewerFormatter as F;
 use App\Viewer\ViewerQueries;
@@ -28,6 +27,13 @@ Bootstrap::init();
 SecurityHeaders::applyViewer();
 
 ViewerAuth::enforce();
+
+/**
+ * Días sin un solo evento a partir de los cuales una opción de filtro se
+ * considera dormida: existe en el histórico pero ya no reporta.
+ */
+const FILTER_STALE_DAYS = 7;
+
 
 $severity = readChoice('severity', ['', 'critical', 'error', 'warn', 'info', 'unknown']);
 $eventCategory = readSafeFilterValue('event_category', 50);
@@ -101,14 +107,11 @@ try {
 <html lang="es">
 
 <head>
-    <meta charset="utf-8">
-    <title>logs-devices · Eventos</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-
-    <script src="https://cdn.tailwindcss.com"></script>
+    <?php $pageTitle = 'Eventos';
+    require __DIR__ . '/_viewer_head.php'; ?>
 </head>
 
-<body class="min-h-screen bg-slate-100 text-slate-900">
+<body class="min-h-screen bg-ink-100 text-ink-900">
     <?php $activePage = 'events';
     require __DIR__ . '/_viewer_header.php'; ?>
 
@@ -119,32 +122,27 @@ try {
                 <p class="mt-2 font-mono text-sm"><?= F::e($loadError) ?></p>
             </section>
         <?php else: ?>
-            <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <section class="rounded-2xl border border-ink-200 bg-white p-6 shadow-sm">
                 <form method="GET" action="/events.php" class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                     <input type="hidden" name="page" value="1">
                     <div>
-                        <label for="severity" class="block text-sm font-medium text-slate-700">Severidad</label>
-                        <select id="severity" name="severity" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+                        <label for="severity" class="block text-sm font-medium text-ink-700">Severidad</label>
+                        <select id="severity" name="severity" class="mt-1 w-full rounded-lg border border-ink-300 bg-white px-3 py-2 text-sm">
                             <option value="" <?= selectedValue($severity, '') ?>>Todas</option>
-                            <option value="critical" <?= selectedValue($severity, 'critical') ?>>Critical</option>
+                            <option value="critical" <?= selectedValue($severity, 'critical') ?>>Crítico</option>
                             <option value="error" <?= selectedValue($severity, 'error') ?>>Error</option>
-                            <option value="warn" <?= selectedValue($severity, 'warn') ?>>Warning</option>
+                            <option value="warn" <?= selectedValue($severity, 'warn') ?>>Aviso</option>
                             <option value="info" <?= selectedValue($severity, 'info') ?>>Info</option>
-                            <option value="unknown" <?= selectedValue($severity, 'unknown') ?>>Unknown</option>
+                            <option value="unknown" <?= selectedValue($severity, 'unknown') ?>>Sin definir</option>
                         </select>
                     </div>
 
                     <div>
-                        <label for="event_category" class="block text-sm font-medium text-slate-700">Categoría</label>
-                        <select id="event_category" name="event_category" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+                        <label for="event_category" class="block text-sm font-medium text-ink-700">Categoría</label>
+                        <select id="event_category" name="event_category" class="mt-1 w-full rounded-lg border border-ink-300 bg-white px-3 py-2 text-sm">
                             <option value="" <?= selectedValue($eventCategory, '') ?>>Todas</option>
 
-                            <?php foreach ($eventCategories as $option): ?>
-                                <?php $value = (string) ($option['value'] ?? 'unknown'); ?>
-                                <option value="<?= F::e($value) ?>" <?= selectedValue($eventCategory, $value) ?>>
-                                    <?= F::e($value) ?> (<?= F::number((int) ($option['total'] ?? 0)) ?>)
-                                </option>
-                            <?php endforeach; ?>
+                            <?= renderFilterOptions($eventCategories, $eventCategory) ?>
 
                             <?php if ($eventCategory !== '' && !optionValueExists($eventCategories, $eventCategory)): ?>
                                 <option value="<?= F::e($eventCategory) ?>" selected>
@@ -155,16 +153,11 @@ try {
                     </div>
 
                     <div>
-                        <label for="event_type" class="block text-sm font-medium text-slate-700">Tipo evento</label>
-                        <select id="event_type" name="event_type" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+                        <label for="event_type" class="block text-sm font-medium text-ink-700">Tipo de evento</label>
+                        <select id="event_type" name="event_type" class="mt-1 w-full rounded-lg border border-ink-300 bg-white px-3 py-2 text-sm">
                             <option value="" <?= selectedValue($eventType, '') ?>>Todos</option>
 
-                            <?php foreach ($eventTypes as $option): ?>
-                                <?php $value = (string) ($option['value'] ?? 'unknown'); ?>
-                                <option value="<?= F::e($value) ?>" <?= selectedValue($eventType, $value) ?>>
-                                    <?= F::e($value) ?> (<?= F::number((int) ($option['total'] ?? 0)) ?>)
-                                </option>
-                            <?php endforeach; ?>
+                            <?= renderFilterOptions($eventTypes, $eventType) ?>
 
                             <?php if ($eventType !== '' && !optionValueExists($eventTypes, $eventType)): ?>
                                 <option value="<?= F::e($eventType) ?>" selected>
@@ -175,8 +168,8 @@ try {
                     </div>
 
                     <div>
-                        <label for="parse_ok" class="block text-sm font-medium text-slate-700">Parse</label>
-                        <select id="parse_ok" name="parse_ok" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+                        <label for="parse_ok" class="block text-sm font-medium text-ink-700">Parseo</label>
+                        <select id="parse_ok" name="parse_ok" class="mt-1 w-full rounded-lg border border-ink-300 bg-white px-3 py-2 text-sm">
                             <option value="" <?= selectedValue($parseOk === null ? '' : (string) $parseOk, '') ?>>Todos</option>
                             <option value="1" <?= selectedValue($parseOk === null ? '' : (string) $parseOk, '1') ?>>OK</option>
                             <option value="0" <?= selectedValue($parseOk === null ? '' : (string) $parseOk, '0') ?>>Error</option>
@@ -184,8 +177,8 @@ try {
                     </div>
 
                     <div>
-                        <label for="limit" class="block text-sm font-medium text-slate-700">Límite</label>
-                        <select id="limit" name="limit" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+                        <label for="limit" class="block text-sm font-medium text-ink-700">Límite</label>
+                        <select id="limit" name="limit" class="mt-1 w-full rounded-lg border border-ink-300 bg-white px-3 py-2 text-sm">
                             <option value="50" <?= selectedValue($limit, 50) ?>>50</option>
                             <option value="100" <?= selectedValue($limit, 100) ?>>100</option>
                             <option value="200" <?= selectedValue($limit, 200) ?>>200</option>
@@ -193,28 +186,28 @@ try {
                     </div>
 
                     <div>
-                        <label for="from" class="block text-sm font-medium text-slate-700">Desde</label>
+                        <label for="from" class="block text-sm font-medium text-ink-700">Desde</label>
                         <input
                             id="from"
                             name="from"
                             type="datetime-local"
                             value="<?= F::e(toDateTimeLocalValue($from)) ?>"
-                            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                            class="mt-1 w-full rounded-lg border border-ink-300 px-3 py-2 text-sm">
                     </div>
 
                     <div>
-                        <label for="to" class="block text-sm font-medium text-slate-700">Hasta</label>
+                        <label for="to" class="block text-sm font-medium text-ink-700">Hasta</label>
                         <input
                             id="to"
                             name="to"
                             type="datetime-local"
                             value="<?= F::e(toDateTimeLocalValue($to)) ?>"
-                            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                            class="mt-1 w-full rounded-lg border border-ink-300 px-3 py-2 text-sm">
                     </div>
 
                     <div>
-                        <label for="bridge_id" class="block text-sm font-medium text-slate-700">Bridge</label>
-                        <select id="bridge_id" name="bridge_id" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+                        <label for="bridge_id" class="block text-sm font-medium text-ink-700">Bridge</label>
+                        <select id="bridge_id" name="bridge_id" class="mt-1 w-full rounded-lg border border-ink-300 bg-white px-3 py-2 text-sm">
                             <option value="" <?= selectedValue($bridgeId ?? '', '') ?>>Todos</option>
                             <?php foreach ($devices as $device): ?>
                                 <?php if ((string) $device['device_kind'] !== 'bridge') {
@@ -228,8 +221,8 @@ try {
                     </div>
 
                     <div>
-                        <label for="device_id" class="block text-sm font-medium text-slate-700">Dispositivo origen</label>
-                        <select id="device_id" name="device_id" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+                        <label for="device_id" class="block text-sm font-medium text-ink-700">Dispositivo origen</label>
+                        <select id="device_id" name="device_id" class="mt-1 w-full rounded-lg border border-ink-300 bg-white px-3 py-2 text-sm">
                             <option value="" <?= selectedValue($deviceId ?? '', '') ?>>Todos</option>
                             <?php foreach ($devices as $device): ?>
                                 <option value="<?= F::e($device['id']) ?>" <?= selectedValue($deviceId ?? '', $device['id']) ?>>
@@ -239,7 +232,7 @@ try {
                         </select>
                     </div>
                     <div>
-                        <label for="ingest_id" class="block text-sm font-medium text-slate-700">Ingest ID</label>
+                        <label for="ingest_id" class="block text-sm font-medium text-ink-700">ID de ingesta</label>
                         <input
                             id="ingest_id"
                             name="ingest_id"
@@ -247,36 +240,36 @@ try {
                             min="1"
                             value="<?= F::e($ingestId ?? '') ?>"
                             placeholder="Ej: 406"
-                            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                            class="mt-1 w-full rounded-lg border border-ink-300 px-3 py-2 text-sm">
                     </div>
 
                     <div class="md:col-span-2">
-                        <label for="q" class="block text-sm font-medium text-slate-700">Buscar texto</label>
+                        <label for="q" class="block text-sm font-medium text-ink-700">Buscar texto</label>
                         <input
                             id="q"
                             name="q"
                             type="search"
                             value="<?= F::e($q) ?>"
                             placeholder="Ej: UNSYNCED, LiDAR, SOC=0, telemetry_header..."
-                            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                            class="mt-1 w-full rounded-lg border border-ink-300 px-3 py-2 text-sm">
                     </div>
 
                     <div class="flex items-end gap-3 md:col-span-2 xl:col-span-4">
-                        <button type="submit" class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">
+                        <button type="submit" class="rounded-lg bg-ink-900 px-4 py-2 text-sm font-semibold text-white hover:bg-ink-700">
                             Aplicar filtros
                         </button>
 
-                        <a href="/events.php" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                        <a href="/events.php" class="rounded-lg border border-ink-300 px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50">
                             Limpiar
                         </a>
                     </div>
                 </form>
             </section>
 
-            <section class="mt-8 rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <div class="border-b border-slate-200 px-6 py-5">
+            <section class="mt-8 rounded-2xl border border-ink-200 bg-white shadow-sm">
+                <div class="border-b border-ink-200 px-6 py-5">
                     <h2 class="text-lg font-semibold">Resultados</h2>
-                    <p class="mt-1 text-sm text-slate-500">
+                    <p class="mt-1 text-sm text-ink-500">
                         Mostrando <?= F::number(count($events)) ?> de <?= F::number($totalEvents) ?> eventos.
                         Página <?= F::number($page) ?> de <?= F::number($totalPages) ?>.
                         Límite actual: <?= F::number($limit) ?>.
@@ -285,24 +278,24 @@ try {
                         <div class="mt-4 flex flex-wrap items-center gap-3">
                             <?php if ($page > 1): ?>
                                 <a
-                                    class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                    class="rounded-lg border border-ink-300 px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50"
                                     href="<?= F::e(eventsPageUrl($page - 1)) ?>">
                                     ← Anterior
                                 </a>
                             <?php else: ?>
-                                <span class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-300">
+                                <span class="rounded-lg border border-ink-200 px-4 py-2 text-sm font-semibold text-ink-300">
                                     ← Anterior
                                 </span>
                             <?php endif; ?>
 
                             <?php if ($page < $totalPages): ?>
                                 <a
-                                    class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                    class="rounded-lg border border-ink-300 px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50"
                                     href="<?= F::e(eventsPageUrl($page + 1)) ?>">
                                     Siguiente →
                                 </a>
                             <?php else: ?>
-                                <span class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-300">
+                                <span class="rounded-lg border border-ink-200 px-4 py-2 text-sm font-semibold text-ink-300">
                                     Siguiente →
                                 </span>
                             <?php endif; ?>
@@ -311,8 +304,8 @@ try {
                 </div>
 
                 <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-slate-200 text-sm">
-                        <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <table class="min-w-full divide-y divide-ink-200 text-sm">
+                        <thead class="bg-ink-50 text-left text-xs font-semibold uppercase tracking-wide text-ink-500">
                             <tr>
                                 <th class="px-4 py-3">Fecha evento</th>
                                 <th class="px-4 py-3">Severidad</th>
@@ -323,15 +316,15 @@ try {
                             </tr>
                         </thead>
 
-                        <tbody class="divide-y divide-slate-200 bg-white">
+                        <tbody class="divide-y divide-ink-200 bg-white">
                             <?php foreach ($events as $event): ?>
                                 <?php $parseOk = ((int) $event['parse_ok']) === 1; ?>
 
-                                <tr class="align-top hover:bg-slate-50">
-                                    <td class="whitespace-nowrap px-4 py-3 text-slate-600">
+                                <tr class="align-top hover:bg-ink-50">
+                                    <td class="whitespace-nowrap px-4 py-3 text-ink-600">
                                         <?= F::datetime($event['event_timestamp'] ?? null) ?>
-                                        <div class="mt-1 text-xs text-slate-400">
-                                            ingest #<?= F::e($event['ingest_id']) ?>
+                                        <div class="mt-1 text-xs text-ink-400">
+                                            ingesta #<?= F::e($event['ingest_id']) ?>
                                         </div>
                                     </td>
 
@@ -339,21 +332,29 @@ try {
                                         <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 <?= F::severityBadgeClass((string) $event['severity']) ?>">
                                             <?= F::e(F::severityLabel((string) $event['severity'])) ?>
                                         </span>
-                                        <div class="mt-1 text-xs text-slate-400">
-                                            <?= F::nullable($event['severity_origin'] ?? null) ?>
+                                        <div class="mt-1 text-xs text-ink-400">
+                                            <?= F::e(F::severityOriginLabel($event['severity_origin'] ?? null)) ?>
                                         </div>
                                     </td>
 
                                     <td class="whitespace-nowrap px-4 py-3">
                                         <div class="font-medium"><?= F::e($event['event_type']) ?></div>
 
-                                        <div class="mt-1 text-xs text-slate-500">
+                                        <div class="mt-1 text-xs text-ink-500">
                                             <?= F::e($event['event_category'] ?? 'unknown') ?>
                                         </div>
 
                                         <span class="mt-2 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ring-1 <?= F::parseBadgeClass($parseOk) ?>">
                                             <?= $parseOk ? 'OK' : 'Error' ?>
                                         </span>
+
+                                        <?php $quality = (string) ($event['quality_status'] ?? 'valid'); ?>
+                                        <?php if ($quality !== 'valid'): ?>
+                                            <span class="mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ring-1 <?= F::qualityBadgeClass($quality) ?>"
+                                                title="<?= F::e(implode(' · ', array_map([F::class, 'anomalyLabel'], F::anomalyFlags($event['anomaly_flags'] ?? null)))) ?>">
+                                                <?= F::e(F::qualityLabel($quality)) ?>
+                                            </span>
+                                        <?php endif; ?>
 
                                         <?php if (!$parseOk): ?>
                                             <div class="mt-1 text-xs text-red-700">
@@ -364,40 +365,41 @@ try {
 
                                     <td class="px-4 py-3">
                                         <?php if (($event['device_id'] ?? null) !== null): ?>
-                                            <a class="font-medium text-sky-700 hover:underline" href="/device.php?id=<?= F::e($event['device_id']) ?>">
+                                            <a class="font-medium text-brand-700 hover:underline" href="/device.php?id=<?= F::e($event['device_id']) ?>">
                                                 <?= F::nullable($event['device_name'] ?? null) ?>
                                             </a>
-                                            <div class="mt-1 font-mono text-xs text-slate-500">
+                                            <div class="mt-1 font-mono text-xs text-ink-500">
                                                 <?= F::nullable($event['device_mac_raw'] ?? $event['device_mac_address'] ?? null) ?>
                                             </div>
                                         <?php else: ?>
-                                            <span class="text-slate-400">—</span>
+                                            <span class="text-ink-400">—</span>
                                         <?php endif; ?>
                                     </td>
 
                                     <td class="px-4 py-3">
                                         <?php if (($event['bridge_device_id'] ?? null) !== null): ?>
-                                            <a class="font-medium text-sky-700 hover:underline" href="/device.php?id=<?= F::e($event['bridge_device_id']) ?>">
+                                            <a class="font-medium text-brand-700 hover:underline" href="/device.php?id=<?= F::e($event['bridge_device_id']) ?>">
                                                 <?= F::nullable($event['bridge_external_id'] ?? null) ?>
                                             </a>
-                                            <div class="mt-1 text-xs text-slate-500">
+                                            <div class="mt-1 text-xs text-ink-500">
                                                 <?= F::nullable($event['bridge_name'] ?? null) ?>
                                             </div>
                                         <?php else: ?>
-                                            <span class="text-slate-400">—</span>
+                                            <span class="text-ink-400">—</span>
                                         <?php endif; ?>
                                     </td>
 
-                                    <td class="min-w-[460px] px-4 py-3 text-slate-700">
-                                        <a class="text-sky-700 hover:underline" href="/event.php?id=<?= F::e($event['id']) ?>">
+                                    <td class="min-w-[460px] px-4 py-3 text-ink-700">
+                                        <a class="text-brand-700 hover:underline" href="/event.php?id=<?= F::e($event['id']) ?>">
                                             Ver detalle
                                         </a>
-                                        <div class="mt-2">
-                                            <?= F::shortText($event['message_text'] ?? '', 320) ?>
-                                        </div>
+                                        <?php $message = F::messageWithoutMetrics($event['message_text'] ?? ''); ?>
+                                        <?php if ($message !== ''): ?>
+                                            <div class="mt-2"><?= F::shortText($message, 320) ?></div>
+                                        <?php endif; ?>
                                         <?php $eventSummary = F::eventSummary($event); ?>
                                         <?php if ($eventSummary !== null): ?>
-                                            <div class="mt-2 text-xs text-slate-500">
+                                            <div class="mt-2 font-mono text-xs text-ink-500">
                                                 <?= F::e($eventSummary) ?>
                                             </div>
                                         <?php endif; ?>
@@ -407,7 +409,7 @@ try {
 
                             <?php if ($events === []): ?>
                                 <tr>
-                                    <td colspan="6" class="px-4 py-8 text-center text-slate-500">
+                                    <td colspan="6" class="px-4 py-8 text-center text-ink-500">
                                         No hay eventos que coincidan con los filtros.
                                     </td>
                                 </tr>
@@ -641,6 +643,61 @@ function eventsPageUrl(int $page): string
 function selectedValue(mixed $current, mixed $expected): string
 {
     return (string) $current === (string) $expected ? ' selected' : '';
+}
+
+/**
+ * Pinta las opciones de un filtro separando las que siguen reportando de las
+ * que llevan FILTER_STALE_DAYS sin un evento.
+ *
+ * Antes todas las opciones se listaban juntas y con su total histórico, así
+ * que un tipo que dejó de existir hace meses parecía tan vigente como uno que
+ * llegó hace un minuto.
+ */
+function renderFilterOptions(array $options, string $current): string
+{
+    $cutoff = time() - (FILTER_STALE_DAYS * 86400);
+    $live = [];
+    $dormant = [];
+
+    foreach ($options as $option) {
+        $lastEventAt = strtotime((string) ($option['last_event_at'] ?? ''));
+
+        if ($lastEventAt !== false && $lastEventAt >= $cutoff) {
+            $live[] = $option;
+        } else {
+            $dormant[] = $option;
+        }
+    }
+
+    $html = renderFilterOptionGroup('Con datos recientes', $live, $current);
+    $html .= renderFilterOptionGroup(
+        'Sin datos desde hace más de ' . FILTER_STALE_DAYS . ' días',
+        $dormant,
+        $current
+    );
+
+    return $html;
+}
+
+function renderFilterOptionGroup(string $label, array $options, string $current): string
+{
+    if ($options === []) {
+        return '';
+    }
+
+    $html = '<optgroup label="' . F::e($label) . '">';
+
+    foreach ($options as $option) {
+        $value = (string) ($option['value'] ?? 'unknown');
+
+        $html .= '<option value="' . F::e($value) . '"'
+            . selectedValue($current, $value) . '>'
+            . F::e($value)
+            . ' (' . F::number((int) ($option['total'] ?? 0)) . ')'
+            . '</option>';
+    }
+
+    return $html . '</optgroup>';
 }
 
 function optionValueExists(array $options, string $value): bool

@@ -123,6 +123,119 @@ Tres tablas principales:
 | `log_events`  | Un evento por fila. Incluye `measurements` y `context` como JSON.      |
 
 Fichero de esquema: `docker/mariadb/init/001_schema.sql`
+Migraciones posteriores: `docs/migrations/`
+
+> **Columna sin uso:** `devices.last_event_at` existe en el esquema pero
+> `DeviceResolver` nunca la escribe: siempre vale NULL. Las vistas que necesitan
+> ese dato lo calculan con `MAX(le.event_timestamp)`. O se mantiene en la ingesta
+> o se elimina; hoy solo confunde.
+
+---
+
+## Panel de control
+
+El dashboard (`public/index.php`) se construye a partir de los datos, no de
+valores fijos en la plantilla. Todo se acota a una **ventana temporal**
+seleccionable (24 h, 7 días, 30 días, histórico completo; por defecto 7 días)
+que se propaga a todas las secciones vía `?window=`.
+
+### Qué muestra
+
+| Bloque                    | De dónde sale                                                                 |
+| ------------------------- | ----------------------------------------------------------------------------- |
+| Estado del sistema        | Antigüedad del último ingest, ingests zombie, ingests en error, tasa de error  |
+| Rendimiento medido        | Última velocidad calculada, resuelta por su clave vigente                      |
+| Actividad                 | Eventos e ingests de la ventana, eventos/hora, errores de parseo y de calidad  |
+| Dispositivos emitiendo    | Dispositivos con eventos en la ventana frente al total registrado              |
+| Métricas en vivo          | Última lectura de cada métrica del catálogo que tenga dato                     |
+| Categorías activas        | Familias de evento con datos en la ventana, con reparto y último evento        |
+| Tipos de evento activos   | Una fila por tipo, con sus errores de parseo dentro                            |
+| Tipos sin datos           | Tipos que existen en el histórico pero ya no reportan, en bloque plegado       |
+| Dispositivos más activos  | Volumen de eventos por dispositivo en la ventana                               |
+| Últimos eventos           | Los 20 más recientes por orden de llegada, con resumen de métricas             |
+
+Una categoría, un tipo o una métrica **no aparece como opción viva si no ha
+producido datos en la ventana**. Los tipos dormidos se listan aparte y
+atenuados, y en `events.php` los desplegables de categoría y tipo se agrupan en
+`Con datos recientes` / `Sin datos desde hace más de 7 días`.
+
+### Identidad visual
+
+La paleta sale del logo (`public/Logo-singular.svg`) y vive en un único sitio,
+`public/_viewer_head.php`, que todas las vistas incluyen. Antes cada página
+repetía su propio `<head>` con el CDN de Tailwind, así que un cambio de estilo
+había que replicarlo en siete ficheros.
+
+| Escala  | Base      | Uso                                                        |
+| ------- | --------- | ---------------------------------------------------------- |
+| `brand` | `#E40D7E` | Magenta corporativo: enlaces, pestaña activa, foco, acentos |
+| `ink`   | `#1E1E1C` | Negro corporativo y sus neutros: texto, bordes, fondos      |
+
+Sustituyen a `sky` y `slate` de Tailwind, que no eran de marca (`slate` tira a
+azul). **El magenta se reserva a lo interactivo y de marca**: los estados del
+sistema usan su propia escala semántica (verde / ámbar / rojo) para que "esto es
+un enlace" y "algo va mal" nunca compartan color.
+
+Contraste del magenta sobre blanco: `brand-500` 4,51:1 · `brand-600` 5,81:1 ·
+`brand-700` 7,87:1 (AA para texto normal).
+
+La tarjeta de estado del sistema señala con un rail lateral de color en vez de
+teñir el fondo entero: informa sin dominar la pantalla.
+
+### Idioma
+
+Toda la interfaz está en español. Se mantienen sin traducir:
+
+- **`Bridge` y `Baliza`**, que son los términos del dominio del producto.
+- **Los valores de datos** que llegan del firmware (`telemetry_snapshot`,
+  `speed_calculated`, `walkerpisa_bridge`...): son identificadores estables del
+  contrato de `events[]`, no texto de interfaz. Traducirlos rompería los filtros.
+
+Las etiquetas de estado sí se traducen en el visor conservando el valor de la
+base de datos: `ViewerFormatter::ingestStatusLabel()`, `severityLabel()`,
+`severityOriginLabel()`, `qualityLabel()` y `anomalyLabel()`.
+
+### Catálogo de métricas
+
+`src/Viewer/MetricCatalog.php` es la fuente única de verdad de las magnitudes
+del sistema. Existe porque el histórico tiene **dos generaciones de claves para
+las mismas medidas**:
+
+| Magnitud    | Clave vigente (`events[]`) | Clave anterior (parsers sobre `logText`) |
+| ----------- | -------------------------- | ---------------------------------------- |
+| Velocidad   | `speedKmh`                 | `speed_kmh`                              |
+| Temperatura | `temperatureC`             | `temperature_c`                          |
+| Humedad     | `humidityPct`              | `humidity_pct`                           |
+| Batería     | `socPct`                   | `soc_pct`                                |
+| RSSI        | `parentRssi`               | `rssi_dbm`                               |
+| LiDAR       | `lidarDistanceMm`          | `lidar_mm`                               |
+| Calidad aire| `airQuality`               | `aq_index`                               |
+
+Cada métrica declara sus alias **en orden de vigencia**. `MetricCatalog::resolve()`
+devuelve el valor del primer alias presente, así que un evento que traiga las dos
+claves se lee por la actual y uno antiguo sigue siendo legible. El visor marca
+como `legacy` los valores que vinieron de una clave de formato anterior.
+
+**Añadir una métrica nueva al panel = añadir una entrada al catálogo.** No hay
+que tocar el dashboard: aparece sola en cuanto llega el primer evento con ese
+campo. Las claves que el firmware envía y el catálogo aún no conoce se muestran
+igualmente en el resumen del evento (`MetricCatalog::unknownScalars()`).
+
+### Calidad del dato
+
+`quality_status` y `anomaly_flags` se calculan en la ingesta y ahora se muestran:
+badge en la lista de eventos y desglose traducido en el detalle del evento
+(`time_fallback`, `gps_no_signal`, `improbable_speed`, `low_soc`, `weak_rssi`...).
+
+### Índices necesarios
+
+El panel filtra por `event_timestamp` sin fijar antes `device_id` / `severity` /
+`event_type`, así que necesita ese campo como primera columna de índice. Aplicar
+en producción antes de usar el panel con volumen:
+
+```
+docs/migrations/2026-09-07_dashboard_indexes.sql
+```
 
 ---
 
@@ -150,7 +263,7 @@ Ingest/ Lógica de ingesta y normalización
 Parsers/ Parser de líneas de logText legacy
 Storage/ NdjsonWriter, Paths
 Support/ Bootstrap, Env
-Viewer/ ViewerQueries, ViewerAuth, ViewerFormatter
+Viewer/ ViewerQueries, DashboardQueries, MetricCatalog, ViewerAuth, ViewerFormatter
 storage/
 raw/ NDJSON por device y día
 rejected/ Payloads rechazados
@@ -204,11 +317,44 @@ cp src/Config/runtime.php.dist src/Config/runtime.php
 # editar runtime.php con DB_HOST=db (nombre del servicio Docker)
 ```
 
+### Alternativa sin Docker (macOS)
+
+```bash
+brew install php composer mariadb
+brew services start mariadb
+
+# Usuario y base de datos
+mariadb -e "CREATE USER IF NOT EXISTS 'logs_user'@'127.0.0.1' IDENTIFIED BY 'logs_pass_dev';
+            CREATE DATABASE IF NOT EXISTS \`logs-devices\`;
+            GRANT ALL ON \`logs-devices\`.* TO 'logs_user'@'127.0.0.1';"
+
+composer install
+mariadb -h 127.0.0.1 -u logs_user -plogs_pass_dev "logs-devices" < docker/mariadb/init/001_schema.sql
+
+# runtime.php local con DB_HOST=127.0.0.1
+cp src/Config/runtime.php.dist src/Config/runtime.php
+
+# Datos de ejemplo (opcional, cubre ambas generaciones de formato)
+mariadb -h 127.0.0.1 -u logs_user -plogs_pass_dev "logs-devices" < scripts/seed_dev_data.sql
+
+# Servir el visor
+php -S 127.0.0.1:8080 -t public
+```
+
+> Los tests de integración asumen una base de datos limpia. Si has cargado
+> `seed_dev_data.sql`, vacía `log_events`, `log_ingests` y `devices` antes de
+> lanzar PHPUnit: el ingest zombie del fixture hace fallar
+> `StoredIngestProcessorTest`.
+
 ---
 
 ## Deploy a producción
 
 El deploy es manual (workflow dispatch): GitHub Actions → PHPUnit (con MariaDB CI) → FTP Deploy a CDMon
+
+> Antes del primer deploy con el panel nuevo, aplicar
+> `docs/migrations/2026-09-07_dashboard_indexes.sql` en phpMyAdmin. Sin esos
+> índices el dashboard funciona, pero cada carga recorre `log_events` entera.
 
 El workflow **nunca sube**:
 
@@ -243,7 +389,7 @@ vendor/bin/phpunit
 
 ```bash
 vendor/bin/phpunit
-# Esperado: 69 tests, 317 assertions, OK
+# Esperado: toda la suite en verde
 ```
 
 Cobertura principal:
@@ -253,3 +399,5 @@ Cobertura principal:
 - `VehicleEventNormalizer` — fallback y prioridad sobre events[]
 - `IngestValidator` — validación flexible legacy y nuevo formato
 - `LogEventWriter`, `LogParser`, parsers, rate limiter
+- `MetricCatalog` — resolución de alias entre generaciones de formato
+- `ViewerFormatter` — resumen de métricas en eventos estructurados y legacy

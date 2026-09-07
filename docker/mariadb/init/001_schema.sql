@@ -141,6 +141,12 @@ CREATE TABLE IF NOT EXISTS log_events (
   KEY idx_log_events_ingest_id (ingest_id),
   KEY idx_log_events_bridge_device_timestamp (bridge_device_id, event_timestamp),
 
+  -- El panel filtra por ventana temporal sin fijar antes device/severity/type,
+  -- así que necesita event_timestamp como primera columna.
+  KEY idx_log_events_event_timestamp (event_timestamp),
+  KEY idx_log_events_category_timestamp (event_category, event_timestamp),
+  KEY idx_log_events_quality_timestamp (quality_status, event_timestamp),
+
   CONSTRAINT fk_log_events_ingest
     FOREIGN KEY (ingest_id)
     REFERENCES log_ingests (id)

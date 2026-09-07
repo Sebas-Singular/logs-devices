@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use App\Database\Connection;
-use App\Support\Env;
 use App\Viewer\ViewerAuth;
 use App\Viewer\ViewerFormatter as F;
 use App\Viewer\ViewerQueries;
@@ -64,14 +63,11 @@ try {
 <html lang="es">
 
 <head>
-    <meta charset="utf-8">
-    <title>logs-devices · Detalle evento</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-
-    <script src="https://cdn.tailwindcss.com"></script>
+    <?php $pageTitle = 'Detalle de evento';
+    require __DIR__ . '/_viewer_head.php'; ?>
 </head>
 
-<body class="min-h-screen bg-slate-100 text-slate-900">
+<body class="min-h-screen bg-ink-100 text-ink-900">
     <?php $activePage = 'events';
     require __DIR__ . '/_viewer_header.php'; ?>
 
@@ -92,22 +88,22 @@ try {
         <?php else: ?>
             <?php $parseOk = ((int) $event['parse_ok']) === 1; ?>
 
-            <section class="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <section class="mb-8 rounded-2xl border border-ink-200 bg-white p-6 shadow-sm">
                 <h2 class="text-lg font-semibold">Navegación de investigación</h2>
-                <p class="mt-1 text-sm text-slate-500">
+                <p class="mt-1 text-sm text-ink-500">
                     Accesos rápidos para revisar eventos relacionados.
                 </p>
 
                 <div class="mt-5 flex flex-wrap gap-3">
                     <a
-                        class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                        class="rounded-lg border border-ink-300 px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50"
                         href="/events.php?ingest_id=<?= F::e($event['ingest_id']) ?>">
-                        Eventos del mismo ingest
+                        Eventos de la misma ingesta
                     </a>
 
                     <?php if (($event['device_id'] ?? null) !== null): ?>
                         <a
-                            class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                            class="rounded-lg border border-ink-300 px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50"
                             href="/events.php?device_id=<?= F::e($event['device_id']) ?>">
                             Eventos del mismo dispositivo
                         </a>
@@ -115,7 +111,7 @@ try {
 
                     <?php if (($event['bridge_device_id'] ?? null) !== null): ?>
                         <a
-                            class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                            class="rounded-lg border border-ink-300 px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50"
                             href="/events.php?bridge_id=<?= F::e($event['bridge_device_id']) ?>">
                             Eventos del mismo bridge
                         </a>
@@ -123,14 +119,14 @@ try {
 
                     <?php if (($event['parse_ok'] ?? null) !== null): ?>
                         <a
-                            class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                            class="rounded-lg border border-ink-300 px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50"
                             href="/events.php?parse_ok=<?= ((int) $event['parse_ok']) === 1 ? '1' : '0' ?>">
                             Eventos con mismo estado de parse
                         </a>
                     <?php endif; ?>
 
                     <a
-                        class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+                        class="rounded-lg bg-ink-900 px-4 py-2 text-sm font-semibold text-white hover:bg-ink-700"
                         href="/events.php">
                         Volver a eventos
                     </a>
@@ -138,29 +134,29 @@ try {
             </section>
 
             <section class="grid gap-6 lg:grid-cols-3">
-                <article class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-1">
+                <article class="rounded-2xl border border-ink-200 bg-white p-6 shadow-sm lg:col-span-1">
                     <h2 class="text-lg font-semibold">Resumen</h2>
 
                     <dl class="mt-5 space-y-4 text-sm">
                         <div>
-                            <dt class="font-medium text-slate-500">ID evento</dt>
-                            <dd class="mt-1 font-mono text-slate-900"><?= F::e($event['id']) ?></dd>
+                            <dt class="font-medium text-ink-500">ID evento</dt>
+                            <dd class="mt-1 font-mono text-ink-900"><?= F::e($event['id']) ?></dd>
                         </div>
 
                         <div>
-                            <dt class="font-medium text-slate-500">Severidad</dt>
+                            <dt class="font-medium text-ink-500">Severidad</dt>
                             <dd class="mt-1">
                                 <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 <?= F::severityBadgeClass((string) $event['severity']) ?>">
                                     <?= F::e(F::severityLabel((string) $event['severity'])) ?>
                                 </span>
-                                <span class="ml-2 text-xs text-slate-500">
-                                    <?= F::nullable($event['severity_origin'] ?? null) ?>
+                                <span class="ml-2 text-xs text-ink-500">
+                                    <?= F::e(F::severityOriginLabel($event['severity_origin'] ?? null)) ?>
                                 </span>
                             </dd>
                         </div>
 
                         <div>
-                            <dt class="font-medium text-slate-500">Parse</dt>
+                            <dt class="font-medium text-ink-500">Parseo</dt>
                             <dd class="mt-1">
                                 <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 <?= F::parseBadgeClass($parseOk) ?>">
                                     <?= $parseOk ? 'OK' : 'Error' ?>
@@ -175,143 +171,159 @@ try {
                         </div>
 
                         <div>
-                            <dt class="font-medium text-slate-500">Tipo</dt>
-                            <dd class="mt-1 text-slate-900">
+                            <dt class="font-medium text-ink-500">Calidad del dato</dt>
+                            <dd class="mt-1">
+                                <?php $quality = (string) ($event['quality_status'] ?? 'valid'); ?>
+                                <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 <?= F::qualityBadgeClass($quality) ?>">
+                                    <?= F::e(F::qualityLabel($quality)) ?>
+                                </span>
+
+                                <?php $anomalies = F::anomalyFlags($event['anomaly_flags'] ?? null); ?>
+                                <?php if ($anomalies !== []): ?>
+                                    <ul class="mt-2 space-y-1">
+                                        <?php foreach ($anomalies as $flag): ?>
+                                            <li class="text-xs text-amber-800">
+                                                · <?= F::e(F::anomalyLabel($flag)) ?>
+                                            </li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                <?php endif; ?>
+                            </dd>
+                        </div>
+
+                        <div>
+                            <dt class="font-medium text-ink-500">Tipo</dt>
+                            <dd class="mt-1 text-ink-900">
                                 <?= F::e($event['event_type']) ?>
-                                <span class="text-slate-400">/</span>
+                                <span class="text-ink-400">/</span>
                                 <?= F::e($event['event_category']) ?>
                             </dd>
                         </div>
 
                         <div>
-                            <dt class="font-medium text-slate-500">Fecha evento</dt>
-                            <dd class="mt-1 text-slate-900"><?= F::datetime($event['event_timestamp'] ?? null) ?></dd>
+                            <dt class="font-medium text-ink-500">Fecha evento</dt>
+                            <dd class="mt-1 text-ink-900"><?= F::datetime($event['event_timestamp'] ?? null) ?></dd>
                         </div>
 
                         <div>
-                            <dt class="font-medium text-slate-500">Recibido</dt>
-                            <dd class="mt-1 text-slate-900"><?= F::datetime($event['received_at'] ?? null) ?></dd>
+                            <dt class="font-medium text-ink-500">Recibido</dt>
+                            <dd class="mt-1 text-ink-900"><?= F::datetime($event['received_at'] ?? null) ?></dd>
                         </div>
 
                         <div>
-                            <dt class="font-medium text-slate-500">Línea</dt>
-                            <dd class="mt-1 font-mono text-slate-900"><?= F::nullable($event['line_number'] ?? null) ?></dd>
-                        </div>
-
-                        <div>
-                            <dt class="font-medium text-slate-500">Hash evento</dt>
-                            <dd class="mt-1 break-all font-mono text-xs text-slate-700"><?= F::nullable($event['event_hash'] ?? null) ?></dd>
+                            <dt class="font-medium text-ink-500">Hash del evento</dt>
+                            <dd class="mt-1 break-all font-mono text-xs text-ink-700"><?= F::nullable($event['event_hash'] ?? null) ?></dd>
                         </div>
                     </dl>
                 </article>
 
-                <article class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
+                <article class="rounded-2xl border border-ink-200 bg-white p-6 shadow-sm lg:col-span-2">
                     <h2 class="text-lg font-semibold">Mensaje completo</h2>
 
-                    <pre class="mt-4 whitespace-pre-wrap break-words rounded-xl bg-slate-950 p-4 text-sm text-slate-100"><?= F::e($event['message_text'] ?? '') ?></pre>
+                    <pre class="mt-4 whitespace-pre-wrap break-words rounded-xl bg-ink-950 p-4 text-sm text-ink-100"><?= F::e($event['message_text'] ?? '') ?></pre>
                 </article>
             </section>
 
             <section class="mt-8 grid gap-6 lg:grid-cols-2">
-                <article class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <article class="rounded-2xl border border-ink-200 bg-white p-6 shadow-sm">
                     <h2 class="text-lg font-semibold">Dispositivo origen</h2>
 
                     <dl class="mt-5 space-y-4 text-sm">
                         <div>
-                            <dt class="font-medium text-slate-500">Dispositivo</dt>
+                            <dt class="font-medium text-ink-500">Dispositivo</dt>
                             <dd class="mt-1">
                                 <?php if (($event['device_id'] ?? null) !== null): ?>
-                                    <a class="font-medium text-sky-700 hover:underline" href="/device.php?id=<?= F::e($event['device_id']) ?>">
+                                    <a class="font-medium text-brand-700 hover:underline" href="/device.php?id=<?= F::e($event['device_id']) ?>">
                                         <?= F::nullable($event['device_name'] ?? null) ?>
                                     </a>
                                 <?php else: ?>
-                                    <span class="text-slate-400">—</span>
+                                    <span class="text-ink-400">—</span>
                                 <?php endif; ?>
                             </dd>
                         </div>
 
                         <div>
-                            <dt class="font-medium text-slate-500">External ID</dt>
-                            <dd class="mt-1 font-mono text-slate-900"><?= F::nullable($event['device_external_id'] ?? null) ?></dd>
+                            <dt class="font-medium text-ink-500">ID externo</dt>
+                            <dd class="mt-1 font-mono text-ink-900"><?= F::nullable($event['device_external_id'] ?? null) ?></dd>
                         </div>
 
                         <div>
-                            <dt class="font-medium text-slate-500">MAC normalizada</dt>
-                            <dd class="mt-1 font-mono text-slate-900"><?= F::nullable($event['device_mac_address'] ?? null) ?></dd>
+                            <dt class="font-medium text-ink-500">MAC normalizada</dt>
+                            <dd class="mt-1 font-mono text-ink-900"><?= F::nullable($event['device_mac_address'] ?? null) ?></dd>
                         </div>
 
                         <div>
-                            <dt class="font-medium text-slate-500">MAC en línea</dt>
-                            <dd class="mt-1 font-mono text-slate-900"><?= F::nullable($event['device_mac_raw'] ?? null) ?></dd>
+                            <dt class="font-medium text-ink-500">MAC en línea</dt>
+                            <dd class="mt-1 font-mono text-ink-900"><?= F::nullable($event['device_mac_raw'] ?? null) ?></dd>
                         </div>
                     </dl>
                 </article>
 
-                <article class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <h2 class="text-lg font-semibold">Bridge / ingest</h2>
+                <article class="rounded-2xl border border-ink-200 bg-white p-6 shadow-sm">
+                    <h2 class="text-lg font-semibold">Bridge / ingesta</h2>
 
                     <dl class="mt-5 space-y-4 text-sm">
                         <div>
-                            <dt class="font-medium text-slate-500">Bridge</dt>
+                            <dt class="font-medium text-ink-500">Bridge</dt>
                             <dd class="mt-1">
                                 <?php if (($event['bridge_device_id'] ?? null) !== null): ?>
-                                    <a class="font-medium text-sky-700 hover:underline" href="/device.php?id=<?= F::e($event['bridge_device_id']) ?>">
+                                    <a class="font-medium text-brand-700 hover:underline" href="/device.php?id=<?= F::e($event['bridge_device_id']) ?>">
                                         <?= F::nullable($event['bridge_external_id'] ?? null) ?>
                                     </a>
-                                    <div class="mt-1 text-xs text-slate-500">
+                                    <div class="mt-1 text-xs text-ink-500">
                                         <?= F::nullable($event['bridge_name'] ?? null) ?>
                                     </div>
                                 <?php else: ?>
-                                    <span class="text-slate-400">—</span>
+                                    <span class="text-ink-400">—</span>
                                 <?php endif; ?>
                             </dd>
                         </div>
 
                         <div>
-                            <dt class="font-medium text-slate-500">Ingest</dt>
+                            <dt class="font-medium text-ink-500">Ingesta</dt>
                             <dd class="mt-1">
-                                <a class="font-mono font-medium text-sky-700 hover:underline" href="/ingest.php?id=<?= F::e($event['ingest_id']) ?>">
+                                <a class="font-mono font-medium text-brand-700 hover:underline" href="/ingest.php?id=<?= F::e($event['ingest_id']) ?>">
                                     #<?= F::e($event['ingest_id']) ?>
                                 </a>
                             </dd>
                         </div>
 
                         <div>
-                            <dt class="font-medium text-slate-500">Estado ingest</dt>
-                            <dd class="mt-1 text-slate-900"><?= F::nullable($event['ingest_status'] ?? null) ?></dd>
+                            <dt class="font-medium text-ink-500">Estado de la ingesta</dt>
+                            <dd class="mt-1 text-ink-900"><?= F::nullable($event['ingest_status'] ?? null) ?></dd>
                         </div>
 
                         <div>
-                            <dt class="font-medium text-slate-500">Bridge reportado</dt>
-                            <dd class="mt-1 text-slate-900">
+                            <dt class="font-medium text-ink-500">Bridge reportado</dt>
+                            <dd class="mt-1 text-ink-900">
                                 <?= F::nullable($event['bridge_id_reported'] ?? null) ?>
-                                <span class="text-slate-400">·</span>
+                                <span class="text-ink-400">·</span>
                                 <?= F::nullable($event['bridge_name_reported'] ?? null) ?>
                             </dd>
                         </div>
 
                         <div>
-                            <dt class="font-medium text-slate-500">Raw path</dt>
-                            <dd class="mt-1 break-all font-mono text-xs text-slate-700"><?= F::nullable($event['raw_path'] ?? null) ?></dd>
+                            <dt class="font-medium text-ink-500">Ruta del fichero</dt>
+                            <dd class="mt-1 break-all font-mono text-xs text-ink-700"><?= F::nullable($event['raw_path'] ?? null) ?></dd>
                         </div>
 
                         <div>
-                            <dt class="font-medium text-slate-500">Content hash</dt>
-                            <dd class="mt-1 break-all font-mono text-xs text-slate-700"><?= F::nullable($event['content_hash'] ?? null) ?></dd>
+                            <dt class="font-medium text-ink-500">Hash del contenido</dt>
+                            <dd class="mt-1 break-all font-mono text-xs text-ink-700"><?= F::nullable($event['content_hash'] ?? null) ?></dd>
                         </div>
                     </dl>
                 </article>
             </section>
 
             <section class="mt-8 grid gap-6 lg:grid-cols-2">
-                <article class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <h2 class="text-lg font-semibold">Measurements</h2>
-                    <pre class="mt-4 overflow-x-auto rounded-xl bg-slate-950 p-4 text-sm text-slate-100"><?= F::e(prettyJson($event['measurements'] ?? null)) ?></pre>
+                <article class="rounded-2xl border border-ink-200 bg-white p-6 shadow-sm">
+                    <h2 class="text-lg font-semibold">Medidas</h2>
+                    <pre class="mt-4 overflow-x-auto rounded-xl bg-ink-950 p-4 text-sm text-ink-100"><?= F::e(prettyJson($event['measurements'] ?? null)) ?></pre>
                 </article>
 
-                <article class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <h2 class="text-lg font-semibold">Context</h2>
-                    <pre class="mt-4 overflow-x-auto rounded-xl bg-slate-950 p-4 text-sm text-slate-100"><?= F::e(prettyJson($event['context'] ?? null)) ?></pre>
+                <article class="rounded-2xl border border-ink-200 bg-white p-6 shadow-sm">
+                    <h2 class="text-lg font-semibold">Contexto</h2>
+                    <pre class="mt-4 overflow-x-auto rounded-xl bg-ink-950 p-4 text-sm text-ink-100"><?= F::e(prettyJson($event['context'] ?? null)) ?></pre>
                 </article>
             </section>
         <?php endif; ?>

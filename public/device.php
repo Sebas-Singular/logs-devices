@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use App\Database\Connection;
-use App\Support\Env;
 use App\Viewer\ViewerAuth;
 use App\Viewer\ViewerFormatter as F;
 use App\Viewer\ViewerQueries;
@@ -80,14 +79,11 @@ $severityOrder = ['critical', 'error', 'warn', 'info', 'unknown'];
 <html lang="es">
 
 <head>
-    <meta charset="utf-8">
-    <title>logs-devices · Detalle dispositivo</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-
-    <script src="https://cdn.tailwindcss.com"></script>
+    <?php $pageTitle = 'Detalle de dispositivo';
+    require __DIR__ . '/_viewer_head.php'; ?>
 </head>
 
-<body class="min-h-screen bg-slate-100 text-slate-900">
+<body class="min-h-screen bg-ink-100 text-ink-900">
     <?php $activePage = 'devices';
     require __DIR__ . '/_viewer_header.php'; ?>
 
@@ -112,45 +108,45 @@ $severityOrder = ['critical', 'error', 'warn', 'info', 'unknown'];
             ?>
 
             <section class="grid gap-6 lg:grid-cols-3">
-                <article class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-1">
+                <article class="rounded-2xl border border-ink-200 bg-white p-6 shadow-sm lg:col-span-1">
                     <div class="flex items-start justify-between gap-4">
                         <div>
-                            <p class="text-sm font-medium text-slate-500">Tipo</p>
+                            <p class="text-sm font-medium text-ink-500">Tipo</p>
                             <span class="mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 <?= F::deviceKindBadgeClass($kind) ?>">
                                 <?= F::e(F::deviceKindLabel($kind)) ?>
                             </span>
                         </div>
 
-                        <div class="text-right text-xs text-slate-500">
+                        <div class="text-right text-xs text-ink-500">
                             Nº de Registro<br>
-                            <span class="font-mono text-slate-700"><?= F::e($device['id']) ?></span>
+                            <span class="font-mono text-ink-700"><?= F::e($device['id']) ?></span>
                         </div>
                     </div>
 
                     <dl class="mt-6 space-y-4 text-sm">
                         <div>
-                            <dt class="font-medium text-slate-500">Nombre</dt>
-                            <dd class="mt-1 text-slate-900"><?= F::nullable($device['name'] ?? null) ?></dd>
+                            <dt class="font-medium text-ink-500">Nombre</dt>
+                            <dd class="mt-1 text-ink-900"><?= F::nullable($device['name'] ?? null) ?></dd>
                         </div>
 
                         <div>
-                            <dt class="font-medium text-slate-500">External ID</dt>
-                            <dd class="mt-1 font-mono text-slate-900"><?= F::nullable($device['external_id'] ?? null) ?></dd>
+                            <dt class="font-medium text-ink-500">ID externo</dt>
+                            <dd class="mt-1 font-mono text-ink-900"><?= F::nullable($device['external_id'] ?? null) ?></dd>
                         </div>
 
                         <div>
-                            <dt class="font-medium text-slate-500">MAC</dt>
-                            <dd class="mt-1 font-mono text-slate-900"><?= F::nullable($device['mac_address'] ?? null) ?></dd>
+                            <dt class="font-medium text-ink-500">MAC</dt>
+                            <dd class="mt-1 font-mono text-ink-900"><?= F::nullable($device['mac_address'] ?? null) ?></dd>
                         </div>
 
                         <?php if (($device['parent_device_id'] ?? null) !== null): ?>
                             <div>
-                                <dt class="font-medium text-slate-500">Bridge padre</dt>
+                                <dt class="font-medium text-ink-500">Bridge padre</dt>
                                 <dd class="mt-1">
-                                    <a class="font-medium text-sky-700 hover:underline" href="/device.php?id=<?= F::e($device['parent_id']) ?>">
+                                    <a class="font-medium text-brand-700 hover:underline" href="/device.php?id=<?= F::e($device['parent_id']) ?>">
                                         <?= F::nullable($device['parent_external_id'] ?? null) ?>
                                     </a>
-                                    <div class="mt-1 text-xs text-slate-500">
+                                    <div class="mt-1 text-xs text-ink-500">
                                         <?= F::nullable($device['parent_name'] ?? null) ?>
                                     </div>
                                 </dd>
@@ -158,28 +154,28 @@ $severityOrder = ['critical', 'error', 'warn', 'info', 'unknown'];
                         <?php endif; ?>
 
                         <div>
-                            <dt class="font-medium text-slate-500">Primer visto</dt>
-                            <dd class="mt-1 text-slate-900"><?= F::datetime($device['first_seen_at'] ?? null) ?></dd>
+                            <dt class="font-medium text-ink-500">Primer registro</dt>
+                            <dd class="mt-1 text-ink-900"><?= F::datetime($device['first_seen_at'] ?? null) ?></dd>
                         </div>
 
                         <div>
-                            <dt class="font-medium text-slate-500">Último visto</dt>
-                            <dd class="mt-1 text-slate-900"><?= F::datetime($device['last_seen_at'] ?? null) ?></dd>
+                            <dt class="font-medium text-ink-500">Último registro</dt>
+                            <dd class="mt-1 text-ink-900"><?= F::datetime($device['last_seen_at'] ?? null) ?></dd>
                         </div>
                     </dl>
                 </article>
 
-                <article class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
+                <article class="rounded-2xl border border-ink-200 bg-white p-6 shadow-sm lg:col-span-2">
                     <h2 class="text-lg font-semibold">Resumen de eventos</h2>
 
                     <div class="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                        <div class="rounded-xl border border-slate-200 p-4">
-                            <p class="text-sm font-medium text-slate-500">Eventos asociados</p>
+                        <div class="rounded-xl border border-ink-200 p-4">
+                            <p class="text-sm font-medium text-ink-500">Eventos asociados</p>
                             <p class="mt-2 text-3xl font-bold"><?= F::number($totalEvents) ?></p>
                         </div>
 
                         <?php foreach ($severityOrder as $severity): ?>
-                            <div class="rounded-xl border border-slate-200 p-4">
+                            <div class="rounded-xl border border-ink-200 p-4">
                                 <div class="flex items-center justify-between gap-3">
                                     <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 <?= F::severityBadgeClass($severity) ?>">
                                         <?= F::e(F::severityLabel($severity)) ?>
@@ -190,18 +186,18 @@ $severityOrder = ['critical', 'error', 'warn', 'info', 'unknown'];
                         <?php endforeach; ?>
                     </div>
 
-                    <h3 class="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Por tipo</h3>
+                    <h3 class="mt-8 text-sm font-semibold uppercase tracking-wide text-ink-500">Por tipo</h3>
 
-                    <div class="mt-3 overflow-hidden rounded-xl border border-slate-200">
-                        <table class="min-w-full divide-y divide-slate-200 text-sm">
-                            <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <div class="mt-3 overflow-hidden rounded-xl border border-ink-200">
+                        <table class="min-w-full divide-y divide-ink-200 text-sm">
+                            <thead class="bg-ink-50 text-left text-xs font-semibold uppercase tracking-wide text-ink-500">
                                 <tr>
                                     <th class="px-4 py-3">Tipo</th>
-                                    <th class="px-4 py-3">Parse</th>
+                                    <th class="px-4 py-3">Parseo</th>
                                     <th class="px-4 py-3 text-right">Total</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-slate-200 bg-white">
+                            <tbody class="divide-y divide-ink-200 bg-white">
                                 <?php foreach ($eventTypeCounts as $row): ?>
                                     <?php $parseOk = ((int) $row['parse_ok']) === 1; ?>
                                     <tr>
@@ -217,7 +213,7 @@ $severityOrder = ['critical', 'error', 'warn', 'info', 'unknown'];
 
                                 <?php if ($eventTypeCounts === []): ?>
                                     <tr>
-                                        <td colspan="3" class="px-4 py-6 text-center text-slate-500">
+                                        <td colspan="3" class="px-4 py-6 text-center text-ink-500">
                                             No hay eventos asociados.
                                         </td>
                                     </tr>
@@ -229,43 +225,43 @@ $severityOrder = ['critical', 'error', 'warn', 'info', 'unknown'];
             </section>
 
             <?php if ($kind === 'bridge'): ?>
-                <section class="mt-8 rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    <div class="border-b border-slate-200 px-6 py-5">
+                <section class="mt-8 rounded-2xl border border-ink-200 bg-white shadow-sm">
+                    <div class="border-b border-ink-200 px-6 py-5">
                         <h2 class="text-lg font-semibold">Balizas asociadas</h2>
-                        <p class="mt-1 text-sm text-slate-500">
+                        <p class="mt-1 text-sm text-ink-500">
                             Total: <?= F::number(count($children)) ?> balizas hijas.
                         </p>
                     </div>
 
                     <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-slate-200 text-sm">
-                            <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        <table class="min-w-full divide-y divide-ink-200 text-sm">
+                            <thead class="bg-ink-50 text-left text-xs font-semibold uppercase tracking-wide text-ink-500">
                                 <tr>
                                     <th class="px-4 py-3">Nombre</th>
-                                    <th class="px-4 py-3">External ID</th>
+                                    <th class="px-4 py-3">ID externo</th>
                                     <th class="px-4 py-3">MAC</th>
-                                    <th class="px-4 py-3">First seen</th>
-                                    <th class="px-4 py-3">Last seen</th>
+                                    <th class="px-4 py-3">Primer registro</th>
+                                    <th class="px-4 py-3">Último registro</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-slate-200 bg-white">
+                            <tbody class="divide-y divide-ink-200 bg-white">
                                 <?php foreach ($children as $child): ?>
-                                    <tr class="hover:bg-slate-50">
+                                    <tr class="hover:bg-ink-50">
                                         <td class="px-4 py-3 font-medium">
-                                            <a class="text-sky-700 hover:underline" href="/device.php?id=<?= F::e($child['id']) ?>">
+                                            <a class="text-brand-700 hover:underline" href="/device.php?id=<?= F::e($child['id']) ?>">
                                                 <?= F::nullable($child['name'] ?? null) ?>
                                             </a>
                                         </td>
                                         <td class="px-4 py-3 font-mono text-xs"><?= F::nullable($child['external_id'] ?? null) ?></td>
                                         <td class="px-4 py-3 font-mono text-xs"><?= F::nullable($child['mac_address'] ?? null) ?></td>
-                                        <td class="px-4 py-3 text-slate-600"><?= F::datetime($child['first_seen_at'] ?? null) ?></td>
-                                        <td class="px-4 py-3 text-slate-600"><?= F::datetime($child['last_seen_at'] ?? null) ?></td>
+                                        <td class="px-4 py-3 text-ink-600"><?= F::datetime($child['first_seen_at'] ?? null) ?></td>
+                                        <td class="px-4 py-3 text-ink-600"><?= F::datetime($child['last_seen_at'] ?? null) ?></td>
                                     </tr>
                                 <?php endforeach; ?>
 
                                 <?php if ($children === []): ?>
                                     <tr>
-                                        <td colspan="5" class="px-4 py-6 text-center text-slate-500">
+                                        <td colspan="5" class="px-4 py-6 text-center text-ink-500">
                                             Este bridge no tiene balizas asociadas.
                                         </td>
                                     </tr>
@@ -276,17 +272,17 @@ $severityOrder = ['critical', 'error', 'warn', 'info', 'unknown'];
                 </section>
             <?php endif; ?>
 
-            <section class="mt-8 rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <div class="border-b border-slate-200 px-6 py-5">
+            <section class="mt-8 rounded-2xl border border-ink-200 bg-white shadow-sm">
+                <div class="border-b border-ink-200 px-6 py-5">
                     <h2 class="text-lg font-semibold">Últimos eventos</h2>
-                    <p class="mt-1 text-sm text-slate-500">
+                    <p class="mt-1 text-sm text-ink-500">
                         Últimos 50 eventos asociados a este dispositivo.
                     </p>
                 </div>
 
                 <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-slate-200 text-sm">
-                        <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <table class="min-w-full divide-y divide-ink-200 text-sm">
+                        <thead class="bg-ink-50 text-left text-xs font-semibold uppercase tracking-wide text-ink-500">
                             <tr>
                                 <th class="px-4 py-3">Fecha evento</th>
                                 <th class="px-4 py-3">Severidad</th>
@@ -295,12 +291,12 @@ $severityOrder = ['critical', 'error', 'warn', 'info', 'unknown'];
                                 <th class="px-4 py-3">Mensaje</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-slate-200 bg-white">
+                        <tbody class="divide-y divide-ink-200 bg-white">
                             <?php foreach ($latestEvents as $event): ?>
                                 <?php $parseOk = ((int) $event['parse_ok']) === 1; ?>
 
-                                <tr class="align-top hover:bg-slate-50">
-                                    <td class="whitespace-nowrap px-4 py-3 text-slate-600">
+                                <tr class="align-top hover:bg-ink-50">
+                                    <td class="whitespace-nowrap px-4 py-3 text-ink-600">
                                         <?= F::datetime($event['event_timestamp'] ?? null) ?>
                                     </td>
 
@@ -321,31 +317,38 @@ $severityOrder = ['critical', 'error', 'warn', 'info', 'unknown'];
 
                                     <td class="px-4 py-3">
                                         <?php if (($event['device_id'] ?? null) !== null): ?>
-                                            <a class="font-medium text-sky-700 hover:underline" href="/device.php?id=<?= F::e($event['device_id']) ?>">
+                                            <a class="font-medium text-brand-700 hover:underline" href="/device.php?id=<?= F::e($event['device_id']) ?>">
                                                 <?= F::nullable($event['device_name'] ?? null) ?>
                                             </a>
-                                            <div class="mt-1 text-xs text-slate-500">
+                                            <div class="mt-1 text-xs text-ink-500">
                                                 <?= F::nullable($event['device_mac_raw'] ?? $event['device_mac_address'] ?? null) ?>
                                             </div>
                                         <?php else: ?>
-                                            <span class="text-slate-400">—</span>
+                                            <span class="text-ink-400">—</span>
                                         <?php endif; ?>
                                     </td>
 
-                                    <td class="min-w-[420px] px-4 py-3 text-slate-700">
-                                        <a class="text-sky-700 hover:underline" href="/event.php?id=<?= F::e($event['id']) ?>">
+                                    <td class="min-w-[420px] px-4 py-3 text-ink-700">
+                                        <a class="text-brand-700 hover:underline" href="/event.php?id=<?= F::e($event['id']) ?>">
                                             Ver detalle
                                         </a>
-                                        <div class="mt-2">
-                                            <?= F::shortText($event['message_text'] ?? '', 260) ?>
-                                        </div>
+                                        <?php $message = F::messageWithoutMetrics($event['message_text'] ?? ''); ?>
+                                        <?php if ($message !== ''): ?>
+                                            <div class="mt-2"><?= F::shortText($message, 260) ?></div>
+                                        <?php endif; ?>
+                                        <?php $summary = F::eventSummary($event); ?>
+                                        <?php if ($summary !== null): ?>
+                                            <div class="mt-2 font-mono text-xs text-ink-500">
+                                                <?= F::e($summary) ?>
+                                            </div>
+                                        <?php endif; ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
 
                             <?php if ($latestEvents === []): ?>
                                 <tr>
-                                    <td colspan="5" class="px-4 py-8 text-center text-slate-500">
+                                    <td colspan="5" class="px-4 py-8 text-center text-ink-500">
                                         No hay eventos asociados.
                                     </td>
                                 </tr>

@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use App\Database\Connection;
-use App\Support\Env;
 use App\Viewer\ViewerAuth;
 use App\Viewer\ViewerFormatter as F;
 use App\Viewer\ViewerQueries;
@@ -92,42 +91,39 @@ try {
 <html lang="es">
 
 <head>
-    <meta charset="utf-8">
-    <title>logs-devices · Ingests</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-
-    <script src="https://cdn.tailwindcss.com"></script>
+    <?php $pageTitle = 'Ingestas';
+    require __DIR__ . '/_viewer_head.php'; ?>
 </head>
 
-<body class="min-h-screen bg-slate-100 text-slate-900">
-    <?php $activePage = '';
+<body class="min-h-screen bg-ink-100 text-ink-900">
+    <?php $activePage = 'ingests';
     require __DIR__ . '/_viewer_header.php'; ?>
 
     <main class="mx-auto max-w-7xl px-6 py-8">
         <?php if ($loadError !== null): ?>
             <section class="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-800 shadow-sm">
-                <h2 class="text-lg font-semibold">Error cargando ingests</h2>
+                <h2 class="text-lg font-semibold">Error cargando ingestas</h2>
                 <p class="mt-2 font-mono text-sm"><?= F::e($loadError) ?></p>
             </section>
         <?php else: ?>
-            <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <section class="rounded-2xl border border-ink-200 bg-white p-6 shadow-sm">
                 <form method="GET" action="/ingests.php" class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                     <input type="hidden" name="page" value="1">
 
                     <div>
-                        <label for="status" class="block text-sm font-medium text-slate-700">Status</label>
-                        <select id="status" name="status" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+                        <label for="status" class="block text-sm font-medium text-ink-700">Estado</label>
+                        <select id="status" name="status" class="mt-1 w-full rounded-lg border border-ink-300 bg-white px-3 py-2 text-sm">
                             <option value="" <?= selectedValue($status, '') ?>>Todos</option>
-                            <option value="received" <?= selectedValue($status, 'received') ?>>received</option>
-                            <option value="parsing" <?= selectedValue($status, 'parsing') ?>>parsing</option>
-                            <option value="processed" <?= selectedValue($status, 'processed') ?>>processed</option>
-                            <option value="error" <?= selectedValue($status, 'error') ?>>error</option>
+                            <option value="received" <?= selectedValue($status, 'received') ?>>Recibida</option>
+                            <option value="parsing" <?= selectedValue($status, 'parsing') ?>>Procesando</option>
+                            <option value="processed" <?= selectedValue($status, 'processed') ?>>Procesada</option>
+                            <option value="error" <?= selectedValue($status, 'error') ?>>Error</option>
                         </select>
                     </div>
 
                     <div>
-                        <label for="bridge_id_reported" class="block text-sm font-medium text-slate-700">Bridge reportado</label>
-                        <select id="bridge_id_reported" name="bridge_id_reported" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+                        <label for="bridge_id_reported" class="block text-sm font-medium text-ink-700">Bridge reportado</label>
+                        <select id="bridge_id_reported" name="bridge_id_reported" class="mt-1 w-full rounded-lg border border-ink-300 bg-white px-3 py-2 text-sm">
                             <option value="" <?= selectedValue($bridgeIdReported, '') ?>>Todos</option>
                             <?php foreach ($bridgeOptions as $bridge): ?>
                                 <option value="<?= F::e($bridge['bridge_id_reported']) ?>" <?= selectedValue($bridgeIdReported, $bridge['bridge_id_reported']) ?>>
@@ -141,8 +137,8 @@ try {
                     </div>
 
                     <div>
-                        <label for="source_type" class="block text-sm font-medium text-slate-700">Source type</label>
-                        <select id="source_type" name="source_type" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+                        <label for="source_type" class="block text-sm font-medium text-ink-700">Tipo de origen</label>
+                        <select id="source_type" name="source_type" class="mt-1 w-full rounded-lg border border-ink-300 bg-white px-3 py-2 text-sm">
                             <option value="" <?= selectedValue($sourceType, '') ?>>Todos</option>
                             <?php foreach ($sourceTypeOptions as $option): ?>
                                 <option value="<?= F::e($option['source_type']) ?>" <?= selectedValue($sourceType, $option['source_type']) ?>>
@@ -153,8 +149,8 @@ try {
                     </div>
 
                     <div>
-                        <label for="limit" class="block text-sm font-medium text-slate-700">Límite</label>
-                        <select id="limit" name="limit" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+                        <label for="limit" class="block text-sm font-medium text-ink-700">Límite</label>
+                        <select id="limit" name="limit" class="mt-1 w-full rounded-lg border border-ink-300 bg-white px-3 py-2 text-sm">
                             <option value="50" <?= selectedValue($limit, 50) ?>>50</option>
                             <option value="100" <?= selectedValue($limit, 100) ?>>100</option>
                             <option value="200" <?= selectedValue($limit, 200) ?>>200</option>
@@ -162,53 +158,53 @@ try {
                     </div>
 
                     <div>
-                        <label for="from" class="block text-sm font-medium text-slate-700">Desde</label>
+                        <label for="from" class="block text-sm font-medium text-ink-700">Desde</label>
                         <input
                             id="from"
                             name="from"
                             type="datetime-local"
                             value="<?= F::e(toDateTimeLocalValue($from)) ?>"
-                            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                            class="mt-1 w-full rounded-lg border border-ink-300 px-3 py-2 text-sm">
                     </div>
 
                     <div>
-                        <label for="to" class="block text-sm font-medium text-slate-700">Hasta</label>
+                        <label for="to" class="block text-sm font-medium text-ink-700">Hasta</label>
                         <input
                             id="to"
                             name="to"
                             type="datetime-local"
                             value="<?= F::e(toDateTimeLocalValue($to)) ?>"
-                            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                            class="mt-1 w-full rounded-lg border border-ink-300 px-3 py-2 text-sm">
                     </div>
 
                     <div class="md:col-span-2">
-                        <label for="q" class="block text-sm font-medium text-slate-700">Buscar texto</label>
+                        <label for="q" class="block text-sm font-medium text-ink-700">Buscar texto</label>
                         <input
                             id="q"
                             name="q"
                             type="search"
                             value="<?= F::e($q) ?>"
                             placeholder="raw_path, hash, remote_addr, payload_summary..."
-                            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                            class="mt-1 w-full rounded-lg border border-ink-300 px-3 py-2 text-sm">
                     </div>
 
                     <div class="flex items-end gap-3 md:col-span-2 xl:col-span-4">
-                        <button type="submit" class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">
+                        <button type="submit" class="rounded-lg bg-ink-900 px-4 py-2 text-sm font-semibold text-white hover:bg-ink-700">
                             Aplicar filtros
                         </button>
 
-                        <a href="/ingests.php" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                        <a href="/ingests.php" class="rounded-lg border border-ink-300 px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50">
                             Limpiar
                         </a>
                     </div>
                 </form>
             </section>
 
-            <section class="mt-8 rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <div class="border-b border-slate-200 px-6 py-5">
+            <section class="mt-8 rounded-2xl border border-ink-200 bg-white shadow-sm">
+                <div class="border-b border-ink-200 px-6 py-5">
                     <h2 class="text-lg font-semibold">Resultados</h2>
-                    <p class="mt-1 text-sm text-slate-500">
-                        Mostrando <?= F::number(count($ingests)) ?> de <?= F::number($totalIngests) ?> ingests.
+                    <p class="mt-1 text-sm text-ink-500">
+                        Mostrando <?= F::number(count($ingests)) ?> de <?= F::number($totalIngests) ?> ingestas.
                         Página <?= F::number($page) ?> de <?= F::number($totalPages) ?>.
                         Límite actual: <?= F::number($limit) ?>.
                     </p>
@@ -216,21 +212,21 @@ try {
                     <?php if ($totalPages > 1): ?>
                         <div class="mt-4 flex flex-wrap items-center gap-3">
                             <?php if ($page > 1): ?>
-                                <a class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="<?= F::e(ingestsPageUrl($page - 1)) ?>">
+                                <a class="rounded-lg border border-ink-300 px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50" href="<?= F::e(ingestsPageUrl($page - 1)) ?>">
                                     ← Anterior
                                 </a>
                             <?php else: ?>
-                                <span class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-300">
+                                <span class="rounded-lg border border-ink-200 px-4 py-2 text-sm font-semibold text-ink-300">
                                     ← Anterior
                                 </span>
                             <?php endif; ?>
 
                             <?php if ($page < $totalPages): ?>
-                                <a class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="<?= F::e(ingestsPageUrl($page + 1)) ?>">
+                                <a class="rounded-lg border border-ink-300 px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50" href="<?= F::e(ingestsPageUrl($page + 1)) ?>">
                                     Siguiente →
                                 </a>
                             <?php else: ?>
-                                <span class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-300">
+                                <span class="rounded-lg border border-ink-200 px-4 py-2 text-sm font-semibold text-ink-300">
                                     Siguiente →
                                 </span>
                             <?php endif; ?>
@@ -239,41 +235,41 @@ try {
                 </div>
 
                 <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-slate-200 text-sm">
-                        <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <table class="min-w-full divide-y divide-ink-200 text-sm">
+                        <thead class="bg-ink-50 text-left text-xs font-semibold uppercase tracking-wide text-ink-500">
                             <tr>
                                 <th class="px-4 py-3">Recibido</th>
-                                <th class="px-4 py-3">Status</th>
+                                <th class="px-4 py-3">Estado</th>
                                 <th class="px-4 py-3">Bridge</th>
-                                <th class="px-4 py-3">Source</th>
+                                <th class="px-4 py-3">Origen</th>
                                 <th class="px-4 py-3 text-right">Líneas</th>
                                 <th class="px-4 py-3 text-right">OK</th>
                                 <th class="px-4 py-3 text-right">Error</th>
-                                <th class="px-4 py-3">Raw path</th>
+                                <th class="px-4 py-3">Ruta del fichero</th>
                                 <th class="px-4 py-3">Acciones</th>
                             </tr>
                         </thead>
 
-                        <tbody class="divide-y divide-slate-200 bg-white">
+                        <tbody class="divide-y divide-ink-200 bg-white">
                             <?php foreach ($ingests as $ingest): ?>
-                                <tr class="align-top hover:bg-slate-50">
-                                    <td class="whitespace-nowrap px-4 py-3 text-slate-600">
+                                <tr class="align-top hover:bg-ink-50">
+                                    <td class="whitespace-nowrap px-4 py-3 text-ink-600">
                                         <?= F::datetime($ingest['received_at'] ?? null) ?>
-                                        <div class="mt-1 font-mono text-xs text-slate-400">
+                                        <div class="mt-1 font-mono text-xs text-ink-400">
                                             #<?= F::e($ingest['id']) ?>
                                         </div>
                                     </td>
 
                                     <td class="whitespace-nowrap px-4 py-3">
-                                        <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 <?= ingestStatusBadgeClass((string) $ingest['status']) ?>">
-                                            <?= F::e($ingest['status']) ?>
+                                        <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 <?= F::ingestStatusBadgeClass((string) $ingest['status']) ?>">
+                                            <?= F::e(F::ingestStatusLabel((string) $ingest['status'])) ?>
                                         </span>
                                     </td>
 
                                     <td class="px-4 py-3">
                                         <div class="font-medium"><?= F::nullable($ingest['bridge_id_reported'] ?? null) ?></div>
                                         <?php if (($ingest['bridge_device_id'] ?? null) !== null): ?>
-                                            <a class="mt-1 block text-xs text-sky-700 hover:underline" href="/device.php?id=<?= F::e($ingest['bridge_device_id']) ?>">
+                                            <a class="mt-1 block text-xs text-brand-700 hover:underline" href="/device.php?id=<?= F::e($ingest['bridge_device_id']) ?>">
                                                 <?= F::nullable($ingest['bridge_name'] ?? null) ?>
                                             </a>
                                         <?php endif; ?>
@@ -281,7 +277,7 @@ try {
 
                                     <td class="px-4 py-3">
                                         <div class="font-mono text-xs"><?= F::nullable($ingest['source_type'] ?? null) ?></div>
-                                        <div class="mt-1 font-mono text-xs text-slate-500"><?= F::nullable($ingest['remote_addr'] ?? null) ?></div>
+                                        <div class="mt-1 font-mono text-xs text-ink-500"><?= F::nullable($ingest['remote_addr'] ?? null) ?></div>
                                     </td>
 
                                     <td class="whitespace-nowrap px-4 py-3 text-right font-semibold">
@@ -297,22 +293,22 @@ try {
                                         <?php if ($errors > 0): ?>
                                             <span class="font-semibold text-red-700"><?= F::number($errors) ?></span>
                                         <?php else: ?>
-                                            <span class="text-slate-400">0</span>
+                                            <span class="text-ink-400">0</span>
                                         <?php endif; ?>
                                     </td>
 
                                     <td class="min-w-[260px] px-4 py-3">
-                                        <div class="break-all font-mono text-xs text-slate-700">
+                                        <div class="break-all font-mono text-xs text-ink-700">
                                             <?= F::nullable($ingest['raw_path'] ?? null) ?>
                                         </div>
                                     </td>
 
                                     <td class="whitespace-nowrap px-4 py-3">
-                                        <a class="font-medium text-sky-700 hover:underline" href="/ingest.php?id=<?= F::e($ingest['id']) ?>">
-                                            Ver ingest
+                                        <a class="font-medium text-brand-700 hover:underline" href="/ingest.php?id=<?= F::e($ingest['id']) ?>">
+                                            Ver ingesta
                                         </a>
                                         <div class="mt-1">
-                                            <a class="text-xs text-sky-700 hover:underline" href="/events.php?ingest_id=<?= F::e($ingest['id']) ?>">
+                                            <a class="text-xs text-brand-700 hover:underline" href="/events.php?ingest_id=<?= F::e($ingest['id']) ?>">
                                                 Eventos
                                             </a>
                                         </div>
@@ -322,7 +318,7 @@ try {
 
                             <?php if ($ingests === []): ?>
                                 <tr>
-                                    <td colspan="9" class="px-4 py-8 text-center text-slate-500">
+                                    <td colspan="9" class="px-4 py-8 text-center text-ink-500">
                                         No hay ingests que coincidan con los filtros.
                                     </td>
                                 </tr>
@@ -496,17 +492,6 @@ function toDateTimeLocalValue(?string $value): string
     }
 
     return substr(str_replace(' ', 'T', $value), 0, 16);
-}
-
-function ingestStatusBadgeClass(string $status): string
-{
-    return match ($status) {
-        'processed' => 'bg-emerald-100 text-emerald-800 ring-emerald-200',
-        'error' => 'bg-red-100 text-red-800 ring-red-200',
-        'parsing' => 'bg-amber-100 text-amber-800 ring-amber-200',
-        'received' => 'bg-sky-100 text-sky-800 ring-sky-200',
-        default => 'bg-slate-100 text-slate-700 ring-slate-200',
-    };
 }
 
 function ingestsPageUrl(int $page): string

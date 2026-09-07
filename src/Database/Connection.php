@@ -26,7 +26,7 @@ final class Connection
         );
 
         try {
-            return new PDO(
+            $pdo = new PDO(
                 $dsn,
                 $username,
                 $password,
@@ -36,6 +36,20 @@ final class Connection
                     PDO::ATTR_EMULATE_PREPARES => false,
                 ]
             );
+
+            // Bootstrap fija PHP en UTC y todos los DATETIME se escriben desde
+            // PHP. Si la sesión de MariaDB usa la hora local del servidor
+            // (habitual en hosting compartido), NOW() no cuadra con los valores
+            // almacenados y toda comparación temporal -zombies, antigüedad del
+            // último ingest- sale desplazada.
+            //
+            // Se ejecuta como sentencia en lugar de con MYSQL_ATTR_INIT_COMMAND
+            // porque esa constante está deprecada desde PHP 8.5 y su sustituta
+            // (Pdo\Mysql::ATTR_INIT_COMMAND) no existe en 8.3, que es la versión
+            // de producción y de CI.
+            $pdo->exec("SET time_zone = '+00:00'");
+
+            return $pdo;
         } catch (PDOException $exception) {
             throw new PDOException(
                 'Database connection failed: ' . $exception->getMessage(),
